@@ -1,0 +1,183 @@
+// Schema PRODUÇÃO (PostgreSQL) — usado pela Vercel via vercel-build.
+// Mantém os MESMOS tipos do schema.prisma (sqlite/dev) pra evitar
+// divergência de tipos no Prisma Client. A única diferença é provider +
+// binaryTargets pro runtime da Vercel.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Plan {
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  pricePerDay   Float
+  maxUsers      Int            @default(0)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  subscriptions Subscription[]
+  resellers     Reseller[]
+
+  @@map("plans")
+}
+
+model User {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  passwordHash    String
+  name            String
+  phone           String?
+  role            String         @default("USER")
+
+  resellerId      String?
+  reseller        User?          @relation("UserHierarchy", fields: [resellerId], references: [id], onDelete: SetNull)
+  subordinates    User[]         @relation("UserHierarchy")
+
+  active          Boolean        @default(true)
+  lastLoginIp     String?
+  lastLoginAt     DateTime?
+  sharingFlagged  Boolean        @default(false)
+
+  subscriptions   Subscription[]
+  wallet          Wallet?
+  withdraws       Withdraw[]
+  commissions     Commission[]   @relation("CommissionEarner")
+  commissionsFrom Commission[]   @relation("CommissionSource")
+  loginLogs       LoginLog[]
+  resellerProfile Reseller?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([resellerId])
+  @@index([email])
+  @@map("users")
+}
+
+model Reseller {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandName     String?
+  brandSlug     String   @unique
+  logoUrl       String?
+  whatsapp      String?
+  planId        String?
+  plan          Plan?    @relation(fields: [planId], references: [id])
+  maxUsers      Int      @default(0)
+  commissionPct Float    @default(10.0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("resellers")
+}
+
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId      String
+  plan        Plan      @relation(fields: [planId], references: [id])
+  status      String    @default("ACTIVE")
+  startsAt    DateTime  @default(now())
+  expiresAt   DateTime
+  cancelledAt DateTime?
+  createdBy   String?
+  isTrial     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model Wallet {
+  id             String              @id @default(cuid())
+  userId         String              @unique
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance        Float               @default(0)
+  pendingBalance Float               @default(0)
+  totalIn        Float               @default(0)
+  totalOut       Float               @default(0)
+  transactions   WalletTransaction[]
+  updatedAt      DateTime            @updatedAt
+
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id           String   @id @default(cuid())
+  walletId     String
+  wallet       Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type         String
+  amount       Float
+  balanceAfter Float
+  description  String
+  refId        String?
+  meta         String?
+  createdAt    DateTime @default(now())
+
+  @@index([walletId])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}
+
+model Withdraw {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount     Float
+  pixKeyType String
+  pixKey     String
+  note       String?
+  status     String    @default("PENDING")
+  proofUrl   String?
+  approvedAt DateTime?
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("withdraws")
+}
+
+model Commission {
+  id             String   @id @default(cuid())
+  earnerId       String
+  earner         User     @relation("CommissionEarner", fields: [earnerId], references: [id])
+  sourceUserId   String
+  sourceUser     User     @relation("CommissionSource", fields: [sourceUserId], references: [id])
+  subscriptionId String?
+  amount         Float
+  pctApplied     Float
+  description    String
+  paid           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([earnerId])
+  @@index([sourceUserId])
+  @@map("commissions")
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String
+  userAgent String
+  success   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("login_logs")
+}
