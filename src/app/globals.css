@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 13% 7%;
+    --foreground: 0 0% 98%;
+    --card: 224 13% 10%;
+    --card-foreground: 0 0% 98%;
+    --primary: 47 96% 53%;            /* amber */
+    --primary-foreground: 0 0% 0%;
+    --secondary: 220 13% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 13% 14%;
+    --muted-foreground: 220 8% 64%;
+    --accent: 47 96% 53%;
+    --accent-foreground: 0 0% 0%;
+    --border: 220 13% 18%;
+    --input: 220 13% 16%;
+    --ring: 47 96% 53%;
+    --radius: 0.75rem;
+  }
+  html, body { @apply bg-background text-foreground; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+  * { @apply border-border; box-sizing: border-box; }
+}
+
+@layer components {
+  .stat-card {
+    @apply relative rounded-2xl border bg-card/60 p-4 backdrop-blur transition;
+  }
+  .gradient-border {
+    @apply relative;
+  }
+  .gradient-border::before {
+    content: "";
+    @apply absolute inset-0 -z-10 rounded-2xl p-px;
+    background: linear-gradient(135deg, var(--from), var(--to));
+  }
+}
