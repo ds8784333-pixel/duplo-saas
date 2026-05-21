@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, KeyRound, Wallet, Network, Home, LogOut, Zap } from "lucide-react";
+import { LayoutDashboard, Users, KeyRound, Wallet, Network, Home, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -54,11 +54,6 @@ export function Sidebar({ brand }: { brand?: { name: string; logoUrl?: string | 
         })}
       </nav>
 
-      <form action="/api/auth/logout" method="POST" className="p-3 border-t">
-        <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground w-full px-3 py-2 rounded-lg hover:bg-muted/60">
-          <LogOut className="h-4 w-4" /> Voltar ao App
-        </button>
-      </form>
     </aside>
   );
 }

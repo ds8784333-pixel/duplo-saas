@@ -3,9 +3,27 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+// Sem login: se houver sessao usamos ela; senao caimos no primeiro
+// usuario admin/reseller cadastrado para que o painel "Minha revenda"
+// funcione dentro do iframe ADM do Duplo Pro.
+async function resolveUser() {
+  const u = await getCurrentUser().catch(() => null);
+  if (u) return u;
+  return db.user.findFirst({
+    where: { OR: [{ role: "ADMIN" }, { role: "RESELLER" }] },
+    include: { wallet: true, resellerProfile: true },
+    orderBy: { createdAt: "asc" },
+  }).catch(() => null);
+}
+
 export async function GET() {
-  const u = await getCurrentUser();
-  if (!u) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const u = await resolveUser();
+  if (!u) {
+    return NextResponse.json({
+      name: "Admin",
+      resellerProfile: { brandName: "Admin", brandSlug: "minha-revenda", logoUrl: null, whatsapp: "" },
+    });
+  }
   return NextResponse.json(u);
 }
 
@@ -16,11 +34,11 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
-  const u = await getCurrentUser();
-  if (!u) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const u = await resolveUser();
+  if (!u) return NextResponse.json({ error: "Nenhum usuario cadastrado" }, { status: 400 });
 
   const body = patchSchema.safeParse(await req.json());
-  if (!body.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+  if (!body.success) return NextResponse.json({ error: "Dados invalidos" }, { status: 400 });
 
   const profile = await db.reseller.upsert({
     where: { userId: u.id },

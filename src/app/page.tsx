@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { getSessionFromCookies } from "@/lib/auth";
 
-export default async function Home() {
-  const s = await getSessionFromCookies();
-  redirect(s ? "/dashboard" : "/login");
+// Login removido — entrada do app vai direto pro painel ADM (Minha revenda).
+export default function Home() {
+  redirect("/minha-revenda");
 }
