@@ -7,6 +7,21 @@ import { Image as ImageIcon, Home, Upload, MessageSquare, Copy } from "lucide-re
 import { toast } from "sonner";
 
 const MAX = 1024 * 1024;
+// URL do Duplo Pro — o link gerado e a "porta" da conta filha:
+// abre o scanner com a marca/logo do admin e sem o botao ADM.
+const DUPLO_PRO_URL = "https://odds-sable.vercel.app";
+
+// Normaliza slug: lowercase, troca espacos/underscore por hifen, remove o
+// resto que nao for [a-z0-9-], colapsa hifens consecutivos e trim de hifens.
+function normalizeSlug(raw: string) {
+  return (raw || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export default function MinhaRevendaPage() {
   const [profile, setProfile] = useState({ brandName: "", brandSlug: "", logoUrl: "", whatsapp: "" });
@@ -35,15 +50,22 @@ export default function MinhaRevendaPage() {
   }
 
   async function save() {
-    const r = await fetch("/api/auth/me", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(profile) });
+    const cleanSlug = normalizeSlug(profile.brandSlug);
+    if (!cleanSlug) return toast.error("Defina um slug valido (letras, numeros e hifens).");
+    const body = { ...profile, brandSlug: cleanSlug };
+    const r = await fetch("/api/auth/me", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       return toast.error(d.error || "Falha ao salvar");
     }
-    toast.success("Alterações salvas.");
+    setProfile((p) => ({ ...p, brandSlug: cleanSlug }));
+    toast.success("Alteracoes salvas.");
   }
 
-  const link = typeof window !== "undefined" ? `${location.origin}/${profile.brandSlug || "minha-revenda"}` : "";
+  // Link da conta filha: abre o Duplo Pro com a marca/logo do admin aplicadas
+  // e sem o botao ADM. Slug vazio = link incompleto (admin precisa definir).
+  const safeSlug = normalizeSlug(profile.brandSlug);
+  const link = safeSlug ? `${DUPLO_PRO_URL}/r/${safeSlug}` : "";
 
   if (loading) return <div className="p-6"><div className="h-6 w-40 bg-muted/40 rounded animate-pulse" /></div>;
 
@@ -76,10 +98,15 @@ export default function MinhaRevendaPage() {
           <Card>
             <CardHeader><CardTitle>Link de acesso</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              <p className="text-xs text-muted-foreground">Compartilhe este link com seus clientes:</p>
+              <p className="text-xs text-muted-foreground">Compartilhe este link com seus clientes (abre o Duplo Pro com sua marca, sem o botao ADM):</p>
               <div className="flex gap-2">
-                <Input readOnly value={link} />
-                <Button variant="outline" type="button" onClick={() => { navigator.clipboard.writeText(link); toast.success("Link copiado."); }}>
+                <Input readOnly value={link || "Defina um slug para gerar o link"} />
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={!link}
+                  onClick={() => { if (!link) return; navigator.clipboard.writeText(link); toast.success("Link copiado."); }}
+                >
                   <Copy className="h-4 w-4" /> Copiar
                 </Button>
               </div>
@@ -96,9 +123,14 @@ export default function MinhaRevendaPage() {
                 <Input value={profile.brandName} onChange={(e) => setProfile({ ...profile, brandName: e.target.value })} />
               </label>
               <label className="block">
-                <span className="text-xs font-semibold">Slug (somente leitura)</span>
-                <Input readOnly value={profile.brandSlug} />
-                <span className="text-[11px] text-muted-foreground">Usado na URL: //{profile.brandSlug || "minha-revenda"}</span>
+                <span className="text-xs font-semibold">Slug do link *</span>
+                <Input
+                  value={profile.brandSlug}
+                  onChange={(e) => setProfile({ ...profile, brandSlug: e.target.value })}
+                  onBlur={(e) => setProfile({ ...profile, brandSlug: normalizeSlug(e.target.value) })}
+                  placeholder="minha-marca"
+                />
+                <span className="text-[11px] text-muted-foreground">Aparece no fim da URL: {DUPLO_PRO_URL}/r/{safeSlug || "minha-marca"}</span>
               </label>
             </CardContent>
           </Card>
