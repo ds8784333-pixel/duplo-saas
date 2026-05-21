@@ -28,10 +28,17 @@ export async function POST(req: NextRequest) {
   const notificationUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/api/webhooks/payment` : undefined;
 
   try {
+    // MP recusa emails com TLD não público (.local, .test, .invalid).
+    // Usa o email do usuário se for válido, senão um fallback genérico.
+    const validTld = /\.(com|com\.br|net|org|io|app|co|me|dev|tech|ai|info|biz|gov\.br|edu\.br)$/i;
+    const payerEmail = validTld.test(me.email)
+      ? me.email
+      : (process.env.MP_FALLBACK_PAYER_EMAIL || "cliente@duplosaas.com.br");
+
     const pix = await createPixPayment({
       amount,
       description: `Depósito carteira · ${me.name}`,
-      payerEmail: process.env.MP_TEST_PAYER_EMAIL || me.email,
+      payerEmail,
       payerName: me.name,
       externalReference: deposit.id,
       notificationUrl,
