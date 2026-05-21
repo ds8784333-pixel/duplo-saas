@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+
+// URL do Duplo Pro — destino apos cadastro da conta filha.
+const DUPLO_PRO_URL = "https://odds-sable.vercel.app";
 
 export default function BrandedSignupForm({
   brandName,
@@ -16,7 +18,6 @@ export default function BrandedSignupForm({
   brandSlug: string;
   logoUrl: string | null;
 }) {
-  const router = useRouter();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
 
@@ -38,8 +39,10 @@ export default function BrandedSignupForm({
       return;
     }
     toast.success("Conta criada!");
-    router.push("/dashboard");
-    router.refresh();
+    // Volta pro Duplo Pro carregando o email: la o JS detecta que a conta
+    // ainda nao tem acesso liberado e exibe a tela "Quase la".
+    const next = `${DUPLO_PRO_URL}/r/${encodeURIComponent(brandSlug)}?email=${encodeURIComponent(form.email)}`;
+    window.location.href = next;
   }
 
   return (
