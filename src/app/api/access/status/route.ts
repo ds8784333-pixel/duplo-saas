@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   const sub = await db.subscription.findFirst({
     where: { userId: user.id, status: "ACTIVE", expiresAt: { gt: now } },
     orderBy: { expiresAt: "desc" },
-    select: { expiresAt: true, isTrial: true },
+    select: { expiresAt: true, isTrial: true, createdAt: true },
   });
 
   if (!sub) {
@@ -64,6 +64,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Calcula dias totais e restantes pra UI da conta filha.
+  const expiresAtMs = sub.expiresAt.getTime();
+  const startMs = sub.createdAt.getTime();
+  const totalDays = Math.max(1, Math.round((expiresAtMs - startMs) / (24 * 60 * 60 * 1000)));
+  const daysRemaining = Math.max(0, Math.ceil((expiresAtMs - now.getTime()) / (24 * 60 * 60 * 1000)));
+
   return NextResponse.json(
     {
       status: "active",
@@ -72,6 +78,9 @@ export async function GET(req: NextRequest) {
       whatsapp: reseller.whatsapp,
       expiresAt: sub.expiresAt.toISOString(),
       isTrial: sub.isTrial,
+      createdAt: sub.createdAt.toISOString(),
+      totalDays,
+      daysRemaining,
     },
     { headers: CORS }
   );
