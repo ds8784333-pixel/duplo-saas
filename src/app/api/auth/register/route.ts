@@ -47,7 +47,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const token = await signSession({ sub: user.id, email: user.email, role: user.role, rid: user.resellerId });
-  await setSessionCookie(token);
+  // Conta filha (com resellerSlug) NAO recebe cookie de sessao no duplo-saas:
+  // ela opera dentro do Duplo Pro (/r/:slug), que tem seu proprio fluxo de
+  // autenticacao. Deixar cookie aqui faria getCurrentUser() retornar a filha
+  // quando o admin acessar o painel do mesmo navegador.
+  // Cadastro sem resellerSlug = novo RESELLER => mantemos auto-login.
+  if (!resellerId) {
+    const token = await signSession({ sub: user.id, email: user.email, role: user.role, rid: user.resellerId });
+    await setSessionCookie(token);
+  }
   return NextResponse.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
 }
