@@ -3,21 +3,11 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
-// Sem login: se houver sessao usamos ela; senao caimos no primeiro
-// usuario admin/reseller cadastrado para que o painel "Minha revenda"
-// funcione dentro do iframe ADM do Duplo Pro.
-async function resolveUser() {
-  const u = await getCurrentUser().catch(() => null);
-  if (u) return u;
-  return db.user.findFirst({
-    where: { OR: [{ role: "ADMIN" }, { role: "RESELLER" }] },
-    include: { wallet: true, resellerProfile: true },
-    orderBy: { createdAt: "asc" },
-  }).catch(() => null);
-}
-
+// Sem login: getCurrentUser ja cai no primeiro ADMIN/RESELLER quando nao
+// ha sessao (ver src/lib/auth.ts). Mantemos um fallback estatico para o
+// caso de banco vazio.
 export async function GET() {
-  const u = await resolveUser();
+  const u = await getCurrentUser().catch(() => null);
   if (!u) {
     return NextResponse.json({
       name: "Admin",
@@ -46,7 +36,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
-  const u = await resolveUser();
+  const u = await getCurrentUser().catch(() => null);
   if (!u) return NextResponse.json({ error: "Nenhum usuario cadastrado" }, { status: 400 });
 
   const body = patchSchema.safeParse(await req.json());

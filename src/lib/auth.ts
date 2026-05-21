@@ -70,10 +70,20 @@ export async function getSessionFromCookies(): Promise<SessionClaims | null> {
 
 export async function getCurrentUser() {
   const s = await getSessionFromCookies();
-  if (!s) return null;
-  return db.user.findUnique({
-    where: { id: s.sub },
+  if (s) {
+    const u = await db.user.findUnique({
+      where: { id: s.sub },
+      include: { wallet: true, resellerProfile: true },
+    });
+    if (u) return u;
+  }
+  // Login removido — quando nao ha sessao, cai no primeiro ADMIN/RESELLER
+  // cadastrado pra que paineis (Dashboard, Usuarios, Carteira, etc.) e as
+  // APIs internas funcionem dentro do iframe ADM do Duplo Pro.
+  return db.user.findFirst({
+    where: { OR: [{ role: "ADMIN" }, { role: "RESELLER" }] },
     include: { wallet: true, resellerProfile: true },
+    orderBy: { createdAt: "asc" },
   });
 }
 
