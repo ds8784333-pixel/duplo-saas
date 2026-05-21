@@ -1,14 +1,14 @@
 // Helper para o backend (route handlers) publicar eventos no WS server.
 // Uso: await publish("wallet:" + userId, { balance: 100 });
-const WS_PUB_URL = process.env.WS_PUB_URL || "http://localhost:3001/pub";
-
+// Em deploys sem WS (ex: Vercel serverless), basta não setar WS_PUB_URL.
 export async function publish(channel: string, payload: unknown) {
+  const url = process.env.WS_PUB_URL;
+  if (!url) return; // no-op se WS não configurado
   try {
-    await fetch(WS_PUB_URL, {
+    await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ channel, payload }),
-      // não bloquear caso WS server esteja fora
       signal: AbortSignal.timeout(1500),
     });
   } catch {

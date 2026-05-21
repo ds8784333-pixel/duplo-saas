@@ -1,14 +1,9 @@
 import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
-import path from "path";
 
-// content em path absoluto via __dirname pra Tailwind achar os arquivos
-// independente do cwd com que o `next dev` foi disparado.
 const config: Config = {
   darkMode: ["class"],
-  content: [
-    path.join(__dirname, "src/**/*.{ts,tsx,html}"),
-  ],
+  content: ["./src/**/*.{ts,tsx,html}"],
   theme: {
     container: { center: true, padding: "1rem", screens: { "2xl": "1400px" } },
     extend: {

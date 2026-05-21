@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { brl, formatDate } from "@/lib/utils";
-import { Banknote, Plus, RefreshCw } from "lucide-react";
+import { Banknote, Plus, RefreshCw, Copy, X, Loader2, CheckCircle2 } from "lucide-react";
 import { StatsCard } from "@/components/stats-card";
 import { toast } from "sonner";
 import { useWS } from "@/hooks/use-ws";
@@ -25,12 +25,21 @@ const STATUS_COLOR: Record<string, "warning" | "success" | "danger" | "info"> = 
   PENDING: "warning", APPROVED: "info", PAID: "success", REJECTED: "danger",
 };
 
+type DepositCharge = {
+  id: string;
+  amount: number;
+  qrCodeBase64: string | null;
+  copiaECola: string | null;
+  status: string;
+};
+
 export default function CarteiraPage() {
   const router = useRouter();
   const [data, setData] = useState<WalletData | null>(null);
   const [form, setForm] = useState({ amount: "", pixKeyType: "CPF", pixKey: "", note: "" });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -82,7 +91,7 @@ export default function CarteiraPage() {
           <h1 className="text-2xl font-extrabold">Carteira da revenda</h1>
           <p className="text-sm text-muted-foreground">{data.user.brandName || data.user.name}</p>
         </div>
-        <Button variant="gradient"><Plus className="h-4 w-4" /> Adicionar saldo</Button>
+        <Button variant="gradient" onClick={() => setDepositOpen(true)}><Plus className="h-4 w-4" /> Adicionar saldo</Button>
       </header>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -156,6 +165,13 @@ export default function CarteiraPage() {
         </Card>
       </div>
 
+      {depositOpen && (
+        <DepositModal
+          onClose={() => setDepositOpen(false)}
+          onPaid={() => { setDepositOpen(false); load(); }}
+        />
+      )}
+
       <Card>
         <CardHeader><CardTitle>Histórico de solicitações de saque</CardTitle></CardHeader>
         <CardContent>
@@ -175,6 +191,114 @@ export default function CarteiraPage() {
           </Table>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function DepositModal({ onClose, onPaid }: { onClose: () => void; onPaid: () => void }) {
+  const [amount, setAmount] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [charge, setCharge] = useState<DepositCharge | null>(null);
+  const [paid, setPaid] = useState(false);
+
+  async function gerar(e: React.FormEvent) {
+    e.preventDefault();
+    const value = parseFloat(amount.replace(",", "."));
+    if (!value || value <= 0) { toast.error("Informe um valor válido"); return; }
+    setGenerating(true);
+    try {
+      const r = await fetch("/api/deposits", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: value }),
+      });
+      const j = await r.json();
+      if (!r.ok) { toast.error(j.error || "Falha ao gerar Pix"); return; }
+      setCharge(j);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // polling: enquanto o modal estiver aberto com cobrança gerada, consulta status a cada 4s.
+  useEffect(() => {
+    if (!charge?.id || paid) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/deposits/${charge.id}`);
+        const j = await r.json();
+        if (stop) return;
+        if (j.status === "APPROVED") {
+          setPaid(true);
+          toast.success("Pagamento confirmado!");
+          setTimeout(onPaid, 1500);
+        }
+      } catch { /* ignora */ }
+    };
+    const iv = setInterval(tick, 4000);
+    return () => { stop = true; clearInterval(iv); };
+  }, [charge?.id, paid, onPaid]);
+
+  async function copiar() {
+    if (!charge?.copiaECola) return;
+    await navigator.clipboard.writeText(charge.copiaECola);
+    toast.success("Código copiado");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-card border rounded-2xl w-full max-w-md p-5 relative" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        <h2 className="text-lg font-extrabold mb-4">Adicionar saldo via Pix</h2>
+
+        {!charge && (
+          <form onSubmit={gerar} className="space-y-3">
+            <label className="block">
+              <span className="text-xs font-semibold">Valor (R$)</span>
+              <Input
+                required autoFocus inputMode="decimal" placeholder="Ex: 17,99"
+                value={amount} onChange={(e) => setAmount(e.target.value)}
+              />
+            </label>
+            <Button type="submit" variant="gradient" disabled={generating} className="w-full">
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</> : "Gerar QR Code Pix"}
+            </Button>
+          </form>
+        )}
+
+        {charge && !paid && (
+          <div className="space-y-3">
+            <div className="text-sm text-muted-foreground">Valor: <span className="font-bold text-foreground">{brl(charge.amount)}</span></div>
+            {charge.qrCodeBase64 && (
+              <div className="flex justify-center bg-white rounded-xl p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img alt="QR Code Pix" src={`data:image/png;base64,${charge.qrCodeBase64}`} className="w-56 h-56" />
+              </div>
+            )}
+            {charge.copiaECola && (
+              <div>
+                <div className="text-xs font-semibold mb-1">Pix copia-e-cola</div>
+                <div className="flex gap-2">
+                  <input readOnly value={charge.copiaECola} className="flex-1 h-10 rounded-lg border bg-input px-3 text-xs font-mono" />
+                  <Button type="button" onClick={copiar}><Copy className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Aguardando pagamento...
+            </div>
+          </div>
+        )}
+
+        {paid && (
+          <div className="flex flex-col items-center text-center py-6 gap-2">
+            <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+            <div className="font-bold">Pagamento confirmado!</div>
+            <div className="text-xs text-muted-foreground">Saldo creditado na sua carteira.</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

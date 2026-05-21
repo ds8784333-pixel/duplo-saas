@@ -1,55 +1,64 @@
-// Webhook de pagamento — Mercado Pago ou Asaas.
-// STUB seguro: aceita o payload, registra como ADJUSTMENT no console, NÃO credita
-// automaticamente. Quando você ligar de verdade, faça a validação HMAC, busque
-// o pagamento via API do provedor, e chame creditPaymentToWallet().
+// Webhook Mercado Pago — recebe notificação de pagamento, busca status real
+// na API do MP e credita carteira via creditDepositIfApproved (idempotente).
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { db } from "@/lib/db";
-import { publish } from "@/lib/ws-publish";
+import { getPayment } from "@/lib/mercadopago";
+import { creditDepositIfApproved } from "@/lib/wallet-credit";
 
-function verifyMpSignature(req: NextRequest, raw: string) {
+// MP envia x-signature: "ts=...,v1=...".
+// Manifesto: id:<data.id>;request-id:<x-request-id>;ts:<ts>;
+function verifyMpSignature(req: NextRequest, paymentId: string | null) {
   const secret = process.env.MP_WEBHOOK_SECRET;
-  if (!secret) return true; // dev mode
+  if (!secret) return true; // dev sem secret = permite (mas loga)
   const sig = req.headers.get("x-signature") || "";
-  // formato MP: "ts=...,v1=...". Aqui valida apenas a presença em dev.
-  // TODO produção: extrair ts/v1 e recalcular HMAC-SHA256(`id:<id>;request-id:<rid>;ts:<ts>;`)
+  const requestId = req.headers.get("x-request-id") || "";
+  const ts = /ts=([^,]+)/.exec(sig)?.[1];
   const v1 = /v1=([a-f0-9]+)/i.exec(sig)?.[1];
-  if (!v1) return false;
-  const calc = crypto.createHmac("sha256", secret).update(raw).digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(calc));
-}
+  if (!ts || !v1 || !paymentId) return false;
 
-async function creditPaymentToWallet(userId: string, amount: number, ref: string) {
-  const wallet = await db.wallet.upsert({ where: { userId }, create: { userId }, update: {} });
-  const balanceAfter = Number(wallet.balance) + amount;
-  await db.$transaction([
-    db.wallet.update({ where: { userId }, data: { balance: balanceAfter, totalIn: { increment: amount } } }),
-    db.walletTransaction.create({
-      data: {
-        walletId: wallet.id, type: "DEPOSIT", amount, balanceAfter,
-        description: `Depósito PIX · ref ${ref}`, refId: ref,
-      },
-    }),
-  ]);
-  await publish("wallet:" + userId, { type: "wallet.updated", message: "Depósito aprovado" });
+  const manifest = `id:${paymentId};request-id:${requestId};ts:${ts};`;
+  const calc = crypto.createHmac("sha256", secret).update(manifest).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(v1, "hex"), Buffer.from(calc, "hex"));
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
+  // payment id pode vir em query (?data.id=) ou no body
+  const url = new URL(req.url);
+  const queryId = url.searchParams.get("data.id") || url.searchParams.get("id");
   const raw = await req.text();
-  if (!verifyMpSignature(req, raw)) {
+  let payload: { type?: string; action?: string; data?: { id?: string | number } } = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch { /* MP às vezes manda vazio */ }
+
+  const paymentId = String(payload.data?.id || queryId || "");
+  if (!paymentId) {
+    return NextResponse.json({ ok: true, skipped: "no-payment-id" });
+  }
+
+  if (!verifyMpSignature(req, paymentId)) {
     return NextResponse.json({ error: "Assinatura inválida" }, { status: 401 });
   }
-  let payload: any = {};
-  try { payload = JSON.parse(raw); } catch { /* MP às vezes manda form-urlencoded */ }
 
-  // STUB: log + 200. Substitua aqui:
-  // 1. extrair payment id de payload.data.id
-  // 2. GET https://api.mercadopago.com/v1/payments/{id} com MP_ACCESS_TOKEN
-  // 3. se status === "approved": creditPaymentToWallet(userId, amount, paymentId)
-  console.log("[webhook payment] received", { topic: payload.type || payload.action, id: payload.data?.id });
+  const topic = payload.type || payload.action || "";
+  if (topic && !topic.includes("payment")) {
+    return NextResponse.json({ ok: true, skipped: "topic", topic });
+  }
 
-  return NextResponse.json({ ok: true, mode: "stub" });
+  try {
+    const payment = await getPayment(paymentId);
+    const depositId = payment.external_reference as string | undefined;
+    if (!depositId) {
+      return NextResponse.json({ ok: true, skipped: "no-external-reference" });
+    }
+    const result = await creditDepositIfApproved(depositId, payment.status);
+    return NextResponse.json({ ok: true, result });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "erro";
+    console.error("[webhook payment] error", message);
+    // devolver 200 evita reentrega em loop por erros nossos — MP usa 2xx como ack
+    return NextResponse.json({ ok: false, error: message });
+  }
 }
-
-// Para você verificar manualmente em dev:
-// curl -X POST localhost:3000/api/webhooks/payment -d '{"type":"payment","data":{"id":"123"}}'
