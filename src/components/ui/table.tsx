@@ -10,7 +10,7 @@ export const TBody = (p: React.HTMLAttributes<HTMLTableSectionElement>) =>
   <tbody className="[&_tr:last-child]:border-0" {...p} />;
 export const TR = ({ className, ...p }: React.HTMLAttributes<HTMLTableRowElement>) =>
   <tr className={cn("border-b transition hover:bg-muted/40", className)} {...p} />;
-export const TH = ({ className, ...p }: React.HTMLAttributes<HTMLTableCellElement>) =>
+export const TH = ({ className, ...p }: React.ThHTMLAttributes<HTMLTableCellElement>) =>
   <th className={cn("h-10 px-3 text-left align-middle text-xs font-semibold uppercase tracking-wide text-muted-foreground", className)} {...p} />;
-export const TD = ({ className, ...p }: React.HTMLAttributes<HTMLTableCellElement>) =>
+export const TD = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) =>
   <td className={cn("p-3 align-middle text-sm", className)} {...p} />;
