@@ -23,6 +23,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/webhooks") ||
+    pathname.startsWith("/api/reseller") || // dados publicos da marca pra landing branded
     pathname.match(/\.(svg|png|jpg|ico|webp|gif)$/)
   ) return NextResponse.next();
 
