@@ -3,17 +3,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
-// Sem login: getCurrentUser ja cai no primeiro ADMIN/RESELLER quando nao
-// ha sessao (ver src/lib/auth.ts). Mantemos um fallback estatico para o
-// caso de banco vazio.
 export async function GET() {
-  const u = await getCurrentUser().catch(() => null);
-  if (!u) {
-    return NextResponse.json({
-      name: "Admin",
-      resellerProfile: { brandName: "Admin", brandSlug: "minha-revenda", logoUrl: null, whatsapp: "" },
-    });
-  }
+  const u = await getCurrentUser();
+  if (!u) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
   return NextResponse.json(u);
 }
 
@@ -36,8 +28,8 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest) {
-  const u = await getCurrentUser().catch(() => null);
-  if (!u) return NextResponse.json({ error: "Nenhum usuario cadastrado" }, { status: 400 });
+  const u = await getCurrentUser();
+  if (!u) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
 
   const body = patchSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Dados invalidos" }, { status: 400 });

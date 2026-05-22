@@ -1,14 +1,14 @@
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { Sidebar } from "@/components/sidebar";
 
-// Login removido — se nao houver sessao, renderiza com marca padrao "Admin"
-// (o app roda dentro do iframe ADM do Duplo Pro).
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser().catch(() => null);
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
   const brand = {
-    name: user?.resellerProfile?.brandName || user?.name || "Admin",
-    logoUrl: user?.resellerProfile?.logoUrl,
+    name: user.resellerProfile?.brandName || user.name || "DuploOdds",
+    logoUrl: user.resellerProfile?.logoUrl,
   };
 
   return (

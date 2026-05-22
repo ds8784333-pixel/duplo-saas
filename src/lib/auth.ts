@@ -48,11 +48,15 @@ export async function verifyToken(token: string): Promise<SessionClaims | null> 
 }
 
 // ---- Cookie helpers (server-side) ----
+// SameSite=None em producao para que o cookie funcione quando o duplo-saas
+// e embebido em iframe cross-origin (botao ADM do Duplo Pro). Requer
+// Secure=true, que ja e garantido em producao (HTTPS na Vercel).
 export async function setSessionCookie(token: string) {
+  const prod = process.env.NODE_ENV === "production";
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: prod,
+    sameSite: prod ? "none" : "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7,
   });
@@ -70,20 +74,10 @@ export async function getSessionFromCookies(): Promise<SessionClaims | null> {
 
 export async function getCurrentUser() {
   const s = await getSessionFromCookies();
-  if (s) {
-    const u = await db.user.findUnique({
-      where: { id: s.sub },
-      include: { wallet: true, resellerProfile: true },
-    });
-    if (u) return u;
-  }
-  // Login removido — quando nao ha sessao, cai no primeiro ADMIN/RESELLER
-  // cadastrado pra que paineis (Dashboard, Usuarios, Carteira, etc.) e as
-  // APIs internas funcionem dentro do iframe ADM do Duplo Pro.
-  return db.user.findFirst({
-    where: { OR: [{ role: "ADMIN" }, { role: "RESELLER" }] },
+  if (!s) return null;
+  return db.user.findUnique({
+    where: { id: s.sub },
     include: { wallet: true, resellerProfile: true },
-    orderBy: { createdAt: "asc" },
   });
 }
 
