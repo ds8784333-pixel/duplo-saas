@@ -1,5 +1,6 @@
 // Libera (ou renova) acesso de um cliente. Se o e-mail não existir, cria o user
-// vinculado ao reseller logado. Cria/atualiza Subscription e debita preço (placeholder).
+// vinculado ao reseller logado. Cria/atualiza Subscription e debita o preco
+// (dias × pricePerDay) da carteira do reseller. Bloqueia se saldo insuficiente.
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -23,10 +24,36 @@ export async function POST(req: NextRequest) {
   if (!plan) return NextResponse.json({ error: "Nenhum plano ativo" }, { status: 400 });
 
   const email = body.data.email.toLowerCase();
-  const days = body.data.trial ? 1 : body.data.days;
+  const isTrial = body.data.trial;
+  const days = isTrial ? 1 : body.data.days;
+  const pricePerDay = Number(plan.pricePerDay);
+  const price = isTrial ? 0 : pricePerDay * days;
+
+  // Bloqueia liberacao paga se a carteira do reseller nao tem saldo suficiente.
+  // Trial (24h gratis) continua liberado mesmo com saldo zerado.
+  const wallet = await db.wallet.upsert({
+    where: { userId: me.id },
+    create: { userId: me.id },
+    update: {},
+  });
+  const currentBalance = Number(wallet.balance);
+  if (!isTrial && currentBalance < price) {
+    return NextResponse.json(
+      {
+        error: "Saldo insuficiente na carteira da revenda.",
+        balance: currentBalance,
+        price,
+        missing: Number((price - currentBalance).toFixed(2)),
+        pricePerDay,
+        days,
+      },
+      { status: 402 } // Payment Required
+    );
+  }
+
   const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
-  // upsert user
+  // upsert user (cria como conta filha vinculada ao reseller atual).
   let user = await db.user.findUnique({ where: { email } });
   if (!user) {
     user = await db.user.create({
@@ -51,33 +78,36 @@ export async function POST(req: NextRequest) {
     ? new Date(Math.max(existing.expiresAt.getTime(), Date.now()) + days * 24 * 60 * 60 * 1000)
     : expiresAt;
 
-  if (existing) {
-    await db.subscription.update({ where: { id: existing.id }, data: { expiresAt: newExpiry } });
-  } else {
-    await db.subscription.create({
-      data: {
-        userId: user.id, planId: plan.id, status: "ACTIVE",
-        expiresAt: newExpiry, createdBy: me.id, isTrial: body.data.trial,
-      },
-    });
-  }
-
-  // débito placeholder na carteira do reseller (preço por dia × dias)
-  const price = Number(plan.pricePerDay) * days;
-  const wallet = await db.wallet.upsert({ where: { userId: me.id }, create: { userId: me.id }, update: {} });
-  if (price > 0 && !body.data.trial) {
-    const balanceAfter = Number(wallet.balance) - price;
-    await db.$transaction([
-      db.wallet.update({ where: { userId: me.id }, data: { balance: balanceAfter, totalOut: { increment: price } } }),
-      db.walletTransaction.create({
+  // Atualiza/cria subscription + debita carteira numa unica transacao.
+  await db.$transaction(async (tx) => {
+    if (existing) {
+      await tx.subscription.update({ where: { id: existing.id }, data: { expiresAt: newExpiry } });
+    } else {
+      await tx.subscription.create({
+        data: {
+          userId: user.id, planId: plan.id, status: "ACTIVE",
+          expiresAt: newExpiry, createdBy: me.id, isTrial,
+        },
+      });
+    }
+    if (price > 0) {
+      const balanceAfter = currentBalance - price;
+      await tx.wallet.update({
+        where: { userId: me.id },
+        data: { balance: balanceAfter, totalOut: { increment: price } },
+      });
+      await tx.walletTransaction.create({
         data: {
           walletId: wallet.id, type: "RELEASE", amount: -price, balanceAfter,
           description: `Liberação ${days} dia(s) para ${email}`,
         },
-      }),
-    ]);
+      });
+    }
+  });
+
+  if (price > 0) {
     await publish("wallet:" + me.id, { type: "wallet.updated", message: "Acesso liberado" });
   }
 
-  return NextResponse.json({ ok: true, userId: user.id, expiresAt: newExpiry });
+  return NextResponse.json({ ok: true, userId: user.id, expiresAt: newExpiry, debited: price });
 }
