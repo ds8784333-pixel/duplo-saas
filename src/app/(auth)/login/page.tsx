@@ -7,6 +7,7 @@ import { Zap, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { DUPLO_PRO_URL } from "@/lib/config";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +27,12 @@ export default function LoginPage() {
     setLoading(false);
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
+      // Conta filha tentando entrar no painel admin: redireciona pro Duplo Pro.
+      if (r.status === 403 && d.redirectTo) {
+        toast.info("Voce e cliente — vamos te levar pro Duplo Pro.");
+        setTimeout(() => { window.location.href = d.redirectTo; }, 800);
+        return;
+      }
       toast.error(d.error || "Falha no login");
       return;
     }
@@ -45,9 +52,16 @@ export default function LoginPage() {
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-lg bg-primary text-primary-foreground grid place-items-center"><Zap className="h-5 w-5" /></div>
           <div>
-            <div className="font-extrabold">Duplo Pro</div>
-            <div className="text-xs text-muted-foreground">Entre na sua revenda</div>
+            <div className="font-extrabold">Duplo Pro · Painel da revenda</div>
+            <div className="text-xs text-muted-foreground">Acesso para revendedores (conta mãe)</div>
           </div>
+        </div>
+
+        <div className="text-[11px] text-muted-foreground p-2.5 rounded-lg border border-primary/20 bg-primary/5">
+          É cliente?{" "}
+          <a href={`${DUPLO_PRO_URL}/login`} className="text-primary font-semibold hover:underline">
+            Entre pelo Duplo Pro →
+          </a>
         </div>
 
         <label className="block">
