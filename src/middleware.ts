@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { DUPLO_PRO_URL } from "@/lib/config";
 
 const COOKIE = "duplo_session";
 
@@ -28,22 +29,35 @@ function isProtectedPath(pathname: string) {
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-async function isValid(token: string | undefined) {
-  if (!token) return false;
+type Claims = { sub: string; email: string; role: string; rid?: string | null };
+
+async function readClaims(token: string | undefined): Promise<Claims | null> {
+  if (!token) return null;
   const s = process.env.JWT_SECRET;
-  if (!s) return false;
+  if (!s) return null;
   try {
-    await jwtVerify(token, new TextEncoder().encode(s));
-    return true;
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(s));
+    return payload as unknown as Claims;
   } catch {
-    return false;
+    return null;
   }
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get(COOKIE)?.value;
-  const authed = await isValid(token);
+  const claims = await readClaims(token);
+  const authed = !!claims;
+  const isUser = claims?.role === "USER";
+
+  // Conta filha (USER) nunca acessa o painel admin: limpa cookie e manda
+  // pro Duplo Pro (login generico — o /r/<slug> precisa do slug da mae,
+  // que so esta no banco, fora do alcance do middleware).
+  if (isUser && (isProtectedPath(pathname) || pathname === "/login" || pathname === "/register" || pathname === "/")) {
+    const res = NextResponse.redirect(`${DUPLO_PRO_URL}/login`);
+    res.cookies.set(COOKIE, "", { path: "/", maxAge: 0 });
+    return res;
+  }
 
   // Logado em /login ou /register -> dashboard.
   if (authed && (pathname === "/login" || pathname === "/register")) {
@@ -61,9 +75,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // /api/admin/* protegida (apenas com sessao valida).
-  if (pathname.startsWith("/api/admin") && !authed) {
-    return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
+  // /api/admin/* protegida (apenas com sessao valida e nao-USER).
+  if (pathname.startsWith("/api/admin")) {
+    if (!authed) return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
+    if (isUser) return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
   // Caso geral: publico.
