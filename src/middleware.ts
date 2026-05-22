@@ -22,7 +22,7 @@ function isPublicPath(pathname: string) {
 
 const PROTECTED_PREFIXES = [
   "/dashboard", "/usuarios", "/carteira", "/subrevendas",
-  "/minha-revenda", "/liberar-acesso",
+  "/minha-revenda", "/liberar-acesso", "/revendas",
 ];
 
 function isProtectedPath(pathname: string) {

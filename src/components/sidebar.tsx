@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, KeyRound, Wallet, Home, LogOut, Zap } from "lucide-react";
+import { LayoutDashboard, Users, KeyRound, Wallet, Home, LogOut, Zap, Crown } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +12,14 @@ const NAV = [
   { href: "/carteira",         label: "Carteira",        icon: Wallet },
   { href: "/minha-revenda",    label: "Minha revenda",   icon: Home },
 ];
+// Item extra visivel SO pro super-admin geral (ds8784333@gmail.com).
+const SUPER_NAV = [
+  { href: "/revendas", label: "Revendas", icon: Crown },
+];
 
-export function Sidebar({ brand }: { brand?: { name: string; logoUrl?: string | null } }) {
+export function Sidebar({ brand, isSuper }: { brand?: { name: string; logoUrl?: string | null }; isSuper?: boolean }) {
   const pathname = usePathname();
+  const nav = isSuper ? [...SUPER_NAV, ...NAV] : NAV;
   return (
     <aside className="hidden md:flex w-60 flex-col border-r bg-card/40 backdrop-blur sticky top-0 h-screen">
       <div className="flex items-center gap-3 p-4 border-b">
@@ -33,7 +38,7 @@ export function Sidebar({ brand }: { brand?: { name: string; logoUrl?: string | 
       </div>
 
       <nav className="flex-1 overflow-y-auto p-2">
-        {NAV.map((it) => {
+        {nav.map((it) => {
           const active = pathname === it.href || pathname.startsWith(it.href + "/");
           const Icon = it.icon;
           return (

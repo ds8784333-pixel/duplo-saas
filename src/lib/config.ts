@@ -28,6 +28,15 @@ export const DUPLO_PRO_URL =
 export const DUPLO_SAAS_URL =
   process.env.NEXT_PUBLIC_DUPLO_SAAS_URL || "https://duplo-saas.vercel.app";
 
+// Super-admin geral: hierarquia topo. Toda conta MAE (RESELLER) e tratada
+// como cliente desse super-admin — precisa estar aprovada (com Subscription
+// ativa criada por ele) pra usar o painel.
+export const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "ds8784333@gmail.com").toLowerCase();
+
+export function isSuperAdmin(u: { email?: string | null } | null | undefined): boolean {
+  return !!u?.email && u.email.toLowerCase() === SUPER_ADMIN_EMAIL;
+}
+
 // Origins autorizados a chamar o SSO automatico (/api/auth/sso-by-email).
 // Inclui automaticamente o DUPLO_PRO_URL alem da lista de DUPLO_PRO_ORIGINS.
 export function ssoAllowedOrigins(): string[] {
