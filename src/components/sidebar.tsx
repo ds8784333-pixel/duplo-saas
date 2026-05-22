@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, KeyRound, Wallet, Network, Home, LogOut, Zap } from "lucide-react";
+import { LayoutDashboard, Users, KeyRound, Wallet, Home, LogOut, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,6 @@ const NAV = [
   { href: "/usuarios",         label: "Usuários",        icon: Users },
   { href: "/liberar-acesso",   label: "Liberar acesso",  icon: KeyRound },
   { href: "/carteira",         label: "Carteira",        icon: Wallet },
-  { href: "/subrevendas",      label: "Subrevendas",     icon: Network },
   { href: "/minha-revenda",    label: "Minha revenda",   icon: Home },
 ];
 

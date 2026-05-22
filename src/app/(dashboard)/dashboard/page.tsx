@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   const now = new Date();
   const weekAhead = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  const [active, expiringWeek, wallet, pendingCommissions] = await Promise.all([
+  const [active, expiringWeek, wallet] = await Promise.all([
     db.subscription.count({
       where: {
         status: "ACTIVE",
@@ -32,13 +32,11 @@ export default async function DashboardPage() {
       },
     }),
     db.wallet.findUnique({ where: { userId: user.id } }),
-    db.commission.aggregate({ where: { earnerId: user.id, paid: false }, _sum: { amount: true } }),
   ]);
 
   const totalIn = Number(wallet?.totalIn || 0);
   const totalOut = Number(wallet?.totalOut || 0);
   const balance = Number(wallet?.balance || 0);
-  const commPending = Number(pendingCommissions._sum.amount || 0);
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
@@ -51,11 +49,10 @@ export default async function DashboardPage() {
 
       <DashboardRealtime userId={user.id} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatsCard label="Usuários ativos" value={active} color="emerald" />
         <StatsCard label="Expirando essa semana" value={expiringWeek} color="amber" />
         <StatsCard label="Saldo da carteira" value={brl(balance)} color="cyan" />
-        <StatsCard label="Comissão pendente" value={brl(commPending)} color="violet" />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

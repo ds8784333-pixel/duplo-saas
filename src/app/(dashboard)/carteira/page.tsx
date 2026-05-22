@@ -94,12 +94,11 @@ export default function CarteiraPage() {
         <Button variant="gradient" onClick={() => setDepositOpen(true)}><Plus className="h-4 w-4" /> Adicionar saldo</Button>
       </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatsCard label="Saldo atual" value={brl(w.balance)} color="emerald" />
         <StatsCard label="Preço por dia" value={brl(data.pricePerDay)} color="cyan" />
         <StatsCard label="Entradas" value={brl(w.totalIn)} color="violet" />
         <StatsCard label="Saídas" value={brl(w.totalOut)} color="amber" />
-        <StatsCard label="Comissão pendente" value={brl(w.pendingBalance)} color="slate" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
