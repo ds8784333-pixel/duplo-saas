@@ -49,30 +49,34 @@ export async function middleware(req: NextRequest) {
   const claims = await readClaims(token);
   const authed = !!claims;
   const isUser = claims?.role === "USER";
+  const isReseller = claims?.role === "ADMIN" || claims?.role === "RESELLER";
 
   // Conta filha (USER) nunca acessa o painel admin: limpa cookie e manda
-  // pro Duplo Pro (login generico — o /r/<slug> precisa do slug da mae,
-  // que so esta no banco, fora do alcance do middleware).
+  // pro Duplo Pro.
   if (isUser && (isProtectedPath(pathname) || pathname === "/login" || pathname === "/register" || pathname === "/")) {
     const res = NextResponse.redirect(`${DUPLO_PRO_URL}/login`);
     res.cookies.set(COOKIE, "", { path: "/", maxAge: 0 });
     return res;
   }
 
-  // Logado em /login ou /register -> dashboard.
-  if (authed && (pathname === "/login" || pathname === "/register")) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/dashboard";
-    url.search = "";
-    return NextResponse.redirect(url);
+  // /login e /register do duplo-saas nao sao publicos pra acesso direto:
+  // a entrada de revenda e sempre pelo botao ADM no Duplo Pro (que faz
+  // SSO automatico via /api/auth/sso-by-email). Se o usuario chegar aqui:
+  //   - logado como mae -> manda pro /dashboard (atalho)
+  //   - nao logado    -> manda pro /login do Duplo Pro
+  if (pathname === "/login" || pathname === "/register") {
+    if (isReseller) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.redirect(`${DUPLO_PRO_URL}/login`);
   }
 
   // Rotas protegidas exigem auth.
   if (isProtectedPath(pathname) && !authed) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(`${DUPLO_PRO_URL}/login`);
   }
 
   // /api/admin/* protegida (apenas com sessao valida e nao-USER).
