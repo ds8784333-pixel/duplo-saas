@@ -159,7 +159,6 @@ export default function CarteiraPage() {
                 <span className="text-xs font-semibold">Observação</span>
                 <Input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Opcional" />
               </label>
-              <Button type="submit" variant="gradient" disabled={submitting} className="w-full">{submitting ? "Enviando..." : "Solicitar saque"}</Button>
             </form>
           </CardContent>
         </Card>
