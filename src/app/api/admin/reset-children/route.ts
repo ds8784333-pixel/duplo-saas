@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { isSuperAdmin } from "@/lib/config";
 
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
@@ -25,9 +26,14 @@ export async function POST(req: NextRequest) {
   }
 
   const isTargeted = Array.isArray(body.emails) && body.emails.length > 0;
+  const superMode = isSuperAdmin(me) && isTargeted;
 
-  // Lista de filhas: ou todas, ou as do filtro de emails.
-  const childWhere: { resellerId: string; email?: { in: string[] } } = { resellerId: me.id };
+  // Lista de filhas:
+  //  - admin normal: SEMPRE filtra por resellerId = me.id (so apaga suas filhas).
+  //  - super-admin com filtro de emails: pode apagar QUALQUER User da hierarquia
+  //    (mesmo netas — USERs cujo pai e outra revenda).
+  const childWhere: { resellerId?: string; email?: { in: string[] } } = {};
+  if (!superMode) childWhere.resellerId = me.id;
   if (isTargeted) {
     childWhere.email = { in: body.emails!.map((e) => String(e).toLowerCase().trim()) };
   }
