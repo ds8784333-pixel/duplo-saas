@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "Duplo SaaS",
+  title: "Duplo Pro",
   description: "Painel de revenda de assinaturas",
 };
 

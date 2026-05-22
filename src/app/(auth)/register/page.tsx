@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { Zap, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -46,7 +47,28 @@ export default function RegisterPage() {
 
         <label className="block"><span className="text-xs font-semibold">Nome</span><Input required value={form.name} onChange={set("name")} /></label>
         <label className="block"><span className="text-xs font-semibold">E-mail</span><Input type="email" required value={form.email} onChange={set("email")} autoComplete="email" /></label>
-        <label className="block"><span className="text-xs font-semibold">Senha (mín. 6)</span><Input type="password" required minLength={6} value={form.password} onChange={set("password")} autoComplete="new-password" /></label>
+        <label className="block">
+          <span className="text-xs font-semibold">Senha (mín. 6)</span>
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={6}
+              value={form.password}
+              onChange={set("password")}
+              autoComplete="new-password"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </label>
 
         <Button type="submit" disabled={loading} className="w-full">{loading ? "Criando..." : "Criar conta"}</Button>
         <div className="text-xs text-muted-foreground text-center">
