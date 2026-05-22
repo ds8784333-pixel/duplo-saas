@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Inbox, Check, Clock, Gift, AlertTriangle, Wallet } from "lucide-react";
+import { Crown, Inbox, Check, Clock, Gift, AlertTriangle, Wallet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate, brl } from "@/lib/utils";
 
@@ -80,6 +80,34 @@ export default function RevendasPage() {
     }
     toast.success(isTrial ? "24h de acesso liberadas!" : `${dias} dia(s) liberados!`);
     load(); loadWallet();
+  }
+
+  async function removeReseller(email: string, brandName: string) {
+    if (!confirm(
+      `Remover a revenda "${brandName}" (${email})?\n\n` +
+      `Isso vai APAGAR a conta do usuário, todas as filhas vinculadas a ela, ` +
+      `subscriptions, carteira e historico. Esta acao NAO pode ser desfeita.`
+    )) return;
+    setActing(email);
+    const r = await fetch("/api/admin/reset-children", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ confirm: true, emails: [email] }),
+    });
+    setActing("");
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast.error(d.error || "Falha ao remover");
+      return;
+    }
+    const j = await r.json().catch(() => ({}));
+    if (j.deletedChildren > 0) {
+      toast.success(`Revenda "${brandName}" removida.`);
+    } else {
+      toast.error("Conta nao encontrada ou ja removida.");
+    }
+    load();
   }
 
   if (accessDenied) {
@@ -183,6 +211,12 @@ export default function RevendasPage() {
                         onClick={() => approveFor(m.email, 30, false)}>
                         <Check className="h-3.5 w-3.5 mr-1" /> {busy ? "Liberando..." : `30 dias · ${brl(costFor(30, false))}`}
                       </Button>
+                      <Button size="sm" variant="outline" disabled={busy}
+                        title="Remover esta revenda (apaga conta, filhas, carteira e historico)"
+                        onClick={() => removeReseller(m.email, m.brandName)}
+                        className="text-rose-400 border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300 hover:border-rose-500/60">
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
+                      </Button>
                     </div>
                   </div>
                 );
@@ -227,6 +261,12 @@ export default function RevendasPage() {
                       <Button size="sm" variant="outline" disabled={busy || !canAfford(30, false)}
                         onClick={() => approveFor(m.email, 30, false)}>
                         +30 dias · {brl(costFor(30, false))}
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={busy}
+                        title="Remover esta revenda (apaga conta, filhas, carteira e historico)"
+                        onClick={() => removeReseller(m.email, m.brandName)}
+                        className="text-rose-400 border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300 hover:border-rose-500/60">
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
                       </Button>
                     </div>
                   </div>
