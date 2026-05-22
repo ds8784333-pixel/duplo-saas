@@ -9,15 +9,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, signSession, setSessionCookie } from "@/lib/auth";
+import { ssoAllowedOrigins } from "@/lib/config";
 import crypto from "node:crypto";
 
-const DEFAULT_ALLOWED = [
-  "https://odds-sable.vercel.app",
-];
-
 function allowedOrigins(): string[] {
-  const env = (process.env.DUPLO_PRO_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  return env.length ? env : DEFAULT_ALLOWED;
+  return ssoAllowedOrigins();
 }
 
 function originOf(req: NextRequest): string | null {

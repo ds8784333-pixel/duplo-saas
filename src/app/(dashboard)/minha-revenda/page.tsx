@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Image as ImageIcon, Home, Upload, MessageSquare, Copy } from "lucide-react";
 import { toast } from "sonner";
 
+import { DUPLO_PRO_URL } from "@/lib/config";
+
 const MAX = 1024 * 1024;
-// URL do Duplo Pro — o link gerado e a "porta" da conta filha:
-// abre o scanner com a marca/logo do admin e sem o botao ADM.
-const DUPLO_PRO_URL = "https://odds-sable.vercel.app";
 
 // Normaliza slug: lowercase, troca espacos/underscore por hifen, remove o
 // resto que nao for [a-z0-9-], colapsa hifens consecutivos e trim de hifens.

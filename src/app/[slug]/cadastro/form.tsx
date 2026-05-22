@@ -5,9 +5,7 @@ import { Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-
-// URL do Duplo Pro — destino apos cadastro da conta filha.
-const DUPLO_PRO_URL = "https://odds-sable.vercel.app";
+import { DUPLO_PRO_URL } from "@/lib/config";
 
 export default function BrandedSignupForm({
   brandName,
