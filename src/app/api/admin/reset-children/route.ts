@@ -1,8 +1,15 @@
-// Endpoint administrativo: apaga TODAS as contas filhas da revenda atual
-// e zera a carteira do admin (saldo, totalIn, totalOut, transactions e
-// commissions). Usado pra reset/limpeza durante setup ou testes.
+// Endpoint administrativo: apaga contas filhas da revenda atual.
 //
-// IMPORTANTE: destrutivo. Roda apenas em POST, requer body com confirm:true.
+// Dois modos:
+//   1) Reset total — body { confirm: true } SEM 'emails'.
+//      Apaga TODAS as filhas E zera a carteira do admin (balance/totalIn/
+//      totalOut/transactions/commissions).
+//
+//   2) Delecao pontual — body { confirm: true, emails: [...] }.
+//      Apaga SO as filhas listadas. NAO toca na carteira do admin.
+//      (Util pra remover testes sem perder o saldo/historico real.)
+//
+// IMPORTANTE: destrutivo. Sempre exige confirm: true.
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
@@ -17,10 +24,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Envie { "confirm": true } para confirmar.' }, { status: 400 });
   }
 
+  const isTargeted = Array.isArray(body.emails) && body.emails.length > 0;
+
   // Lista de filhas: ou todas, ou as do filtro de emails.
   const childWhere: { resellerId: string; email?: { in: string[] } } = { resellerId: me.id };
-  if (Array.isArray(body.emails) && body.emails.length > 0) {
-    childWhere.email = { in: body.emails.map((e) => String(e).toLowerCase().trim()) };
+  if (isTargeted) {
+    childWhere.email = { in: body.emails!.map((e) => String(e).toLowerCase().trim()) };
   }
 
   const children = await db.user.findMany({
@@ -37,26 +46,30 @@ export async function POST(req: NextRequest) {
       deletedChildren = del.count;
     }
 
-    // Zera a carteira do admin (balance, totalIn, totalOut).
-    const wallet = await tx.wallet.findUnique({ where: { userId: me.id } });
     let txsDeleted = 0;
-    if (wallet) {
-      const t = await tx.walletTransaction.deleteMany({ where: { walletId: wallet.id } });
-      txsDeleted = t.count;
-      await tx.wallet.update({
-        where: { userId: me.id },
-        data: { balance: 0, totalIn: 0, totalOut: 0 },
-      });
+    let commsDeleted = 0;
+    // So zera a carteira do admin no modo "reset total" (sem filtro de emails).
+    // Delecao pontual preserva saldo/historico do admin.
+    if (!isTargeted) {
+      const wallet = await tx.wallet.findUnique({ where: { userId: me.id } });
+      if (wallet) {
+        const t = await tx.walletTransaction.deleteMany({ where: { walletId: wallet.id } });
+        txsDeleted = t.count;
+        await tx.wallet.update({
+          where: { userId: me.id },
+          data: { balance: 0, totalIn: 0, totalOut: 0 },
+        });
+      }
+      const c = await tx.commission.deleteMany({ where: { earnerId: me.id } });
+      commsDeleted = c.count;
     }
 
-    // Apaga commissions do admin (earner = me) — historico zera.
-    const commsDeleted = await tx.commission.deleteMany({ where: { earnerId: me.id } });
-
-    return { deletedChildren, walletTransactionsDeleted: txsDeleted, commissionsDeleted: commsDeleted.count };
+    return { deletedChildren, walletTransactionsDeleted: txsDeleted, commissionsDeleted: commsDeleted };
   });
 
   return NextResponse.json({
     ok: true,
+    mode: isTargeted ? "targeted" : "reset-all",
     adminId: me.id,
     adminEmail: me.email,
     ...result,
