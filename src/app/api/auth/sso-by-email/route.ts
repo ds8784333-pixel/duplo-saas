@@ -96,15 +96,21 @@ export async function POST(req: NextRequest) {
     });
   } else if (user.role !== "ADMIN" && user.role !== "RESELLER") {
     // USER existente. Politica:
-    //   - Conta MAE (resellerId == null) → promove automaticamente a RESELLER.
-    //     Quem se cadastrou direto no Duplo Pro vira revendedor ao abrir o ADM.
-    //   - Conta FILHA (resellerId != null) → mantem 403; cliente de outro
-    //     revendedor nao pode virar revendedor concorrente sozinho.
+    //   - Sem parent (resellerId NULL) OU parent eh o super-admin (ADMIN)
+    //     → conta MAE → promove automaticamente a RESELLER.
+    //   - Parent eh outro RESELLER/SUBRESELLER → conta FILHA de outra
+    //     revenda; mantem 403 (cliente nao vira concorrente sozinho).
     if (user.resellerId) {
-      return NextResponse.json(
-        { error: "Este email pertence a uma conta de cliente, nao a uma revenda." },
-        { status: 403, headers: cors }
-      );
+      const parent = await db.user.findUnique({
+        where: { id: user.resellerId },
+        select: { role: true },
+      });
+      if (parent && parent.role !== "ADMIN") {
+        return NextResponse.json(
+          { error: "Este email pertence a uma conta de cliente, nao a uma revenda." },
+          { status: 403, headers: cors }
+        );
+      }
     }
     // Promove pra RESELLER: gera slug unico e cria reseller profile + wallet
     // se ainda nao existirem.
