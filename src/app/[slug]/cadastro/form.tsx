@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { Zap, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,10 +95,6 @@ export default function BrandedSignupForm({
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Criando..." : "Criar conta"}
         </Button>
-        <div className="text-xs text-muted-foreground text-center">
-          Já tem conta?{" "}
-          <Link href="/login" className="text-primary hover:underline">Entrar</Link>
-        </div>
       </form>
     </div>
   );
