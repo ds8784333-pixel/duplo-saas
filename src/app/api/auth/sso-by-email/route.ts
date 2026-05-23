@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword, signSession, setSessionCookie } from "@/lib/auth";
-import { ssoAllowedOrigins } from "@/lib/config";
+import { ssoAllowedOrigins, DUPLO_SAAS_URL } from "@/lib/config";
 import crypto from "node:crypto";
 
 function allowedOrigins(): string[] {
@@ -148,8 +148,22 @@ export async function POST(req: NextRequest) {
 
   const token = await signSession({ sub: user.id, email: user.email, role: user.role, rid: user.resellerId });
   await setSessionCookie(token);
+
+  // Emite um token CURTO (60s) destinado ao /api/auth/sso-consume.
+  // O cliente vai carregar esse endpoint no iframe.src — assim o cookie de
+  // sessao e setado em contexto FIRST-PARTY do duplo-saas (bypassa o
+  // bloqueio de cookies third-party do Chrome quando o cookie viria da
+  // resposta deste POST cross-origin).
+  const ssoToken = await signSession(
+    { sub: user.id, email: user.email, role: user.role, rid: user.resellerId },
+    "60s"
+  );
+  const ssoUrl =
+    `${DUPLO_SAAS_URL}/api/auth/sso-consume?t=${encodeURIComponent(ssoToken)}` +
+    `&next=${encodeURIComponent("/minha-revenda")}`;
+
   return NextResponse.json(
-    { ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } },
+    { ok: true, ssoUrl, user: { id: user.id, email: user.email, name: user.name, role: user.role } },
     { headers: cors }
   );
 }
