@@ -25,6 +25,14 @@
 export const DUPLO_PRO_URL =
   process.env.NEXT_PUBLIC_DUPLO_PRO_URL || "https://odds-sable.vercel.app";
 
+// Dominios custom ja em uso no Duplo Pro. Hard-coded no fallback pra que
+// o SSO + iframe funcionem mesmo se as env vars (DUPLO_PRO_ORIGINS,
+// FRAME_ANCESTORS_EXTRA) ainda nao tiverem sido setadas no painel da Vercel.
+export const DUPLO_PRO_EXTRA_ORIGINS = [
+  "https://duplopro.xyz",
+  "https://www.duplopro.xyz",
+];
+
 export const DUPLO_SAAS_URL =
   process.env.NEXT_PUBLIC_DUPLO_SAAS_URL || "https://duplo-saas.vercel.app";
 
@@ -38,10 +46,11 @@ export function isSuperAdmin(u: { email?: string | null } | null | undefined): b
 }
 
 // Origins autorizados a chamar o SSO automatico (/api/auth/sso-by-email).
-// Inclui automaticamente o DUPLO_PRO_URL alem da lista de DUPLO_PRO_ORIGINS.
+// Inclui automaticamente o DUPLO_PRO_URL, os dominios custom hard-coded
+// (DUPLO_PRO_EXTRA_ORIGINS) e a lista da env var DUPLO_PRO_ORIGINS.
 export function ssoAllowedOrigins(): string[] {
   const fromEnv = (process.env.DUPLO_PRO_ORIGINS || "")
     .split(",").map((s) => s.trim()).filter(Boolean);
-  const all = new Set<string>([DUPLO_PRO_URL, ...fromEnv]);
+  const all = new Set<string>([DUPLO_PRO_URL, ...DUPLO_PRO_EXTRA_ORIGINS, ...fromEnv]);
   return Array.from(all);
 }

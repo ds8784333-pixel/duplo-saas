@@ -5,7 +5,15 @@
 // (lista separada por espacos), sem precisar mexer no codigo quando o dominio
 // custom for configurado.
 function frameAncestors() {
-  const base = ["'self'", "https://*.vercel.app"];
+  const base = [
+    "'self'",
+    "https://*.vercel.app",
+    // Dominios custom hard-coded (espelhando DUPLO_PRO_EXTRA_ORIGINS em
+    // src/lib/config.ts). Garante que o iframe ADM funcione mesmo sem env
+    // vars setadas na Vercel.
+    "https://duplopro.xyz",
+    "https://www.duplopro.xyz",
+  ];
   if (process.env.NEXT_PUBLIC_DUPLO_PRO_URL) base.push(process.env.NEXT_PUBLIC_DUPLO_PRO_URL);
   if (process.env.FRAME_ANCESTORS_EXTRA) base.push(...process.env.FRAME_ANCESTORS_EXTRA.split(/\s+/));
   return Array.from(new Set(base)).join(" ");
