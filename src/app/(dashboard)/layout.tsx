@@ -37,7 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const brand = {
-    name: user.resellerProfile?.brandName || user.name || "DuploOdds",
+    name: user.resellerProfile?.brandName || user.name || "Duplo Pro",
     logoUrl: user.resellerProfile?.logoUrl,
   };
 

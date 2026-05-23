@@ -32,7 +32,7 @@ export function Sidebar({ brand, isSuper }: { brand?: { name: string; logoUrl?: 
           )}
         </div>
         <div className="leading-tight">
-          <div className="text-sm font-extrabold">{brand?.name || "DuploOdds"}</div>
+          <div className="text-sm font-extrabold">{brand?.name || "Duplo Pro"}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Revendedor</div>
         </div>
       </div>
