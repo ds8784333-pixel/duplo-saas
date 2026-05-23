@@ -95,11 +95,36 @@ export async function POST(req: NextRequest) {
       include: { wallet: true, resellerProfile: true },
     });
   } else if (user.role !== "ADMIN" && user.role !== "RESELLER") {
-    // Conta filha (USER) tentou abrir o painel de admin: nega.
-    return NextResponse.json(
-      { error: "Este email pertence a uma conta de cliente, nao a uma revenda." },
-      { status: 403, headers: cors }
-    );
+    // USER existente. Politica:
+    //   - Conta MAE (resellerId == null) → promove automaticamente a RESELLER.
+    //     Quem se cadastrou direto no Duplo Pro vira revendedor ao abrir o ADM.
+    //   - Conta FILHA (resellerId != null) → mantem 403; cliente de outro
+    //     revendedor nao pode virar revendedor concorrente sozinho.
+    if (user.resellerId) {
+      return NextResponse.json(
+        { error: "Este email pertence a uma conta de cliente, nao a uma revenda." },
+        { status: 403, headers: cors }
+      );
+    }
+    // Promove pra RESELLER: gera slug unico e cria reseller profile + wallet
+    // se ainda nao existirem.
+    let baseSlug = slugify(user.name || email.split("@")[0]);
+    let slug = baseSlug;
+    let i = 1;
+    while (await db.reseller.findUnique({ where: { brandSlug: slug } })) {
+      slug = `${baseSlug}-${i++}`;
+    }
+    user = await db.user.update({
+      where: { id: user.id },
+      data: {
+        role: "RESELLER",
+        ...(user.resellerProfile
+          ? {}
+          : { resellerProfile: { create: { brandName: user.name || displayName, brandSlug: slug } } }),
+        ...(user.wallet ? {} : { wallet: { create: {} } }),
+      },
+      include: { wallet: true, resellerProfile: true },
+    });
   }
 
   // Garante reseller profile (caso o user exista mas sem profile).
