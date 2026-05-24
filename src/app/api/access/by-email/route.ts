@@ -65,12 +65,12 @@ export async function GET(req: NextRequest) {
 
   // SUBRESELLER nunca tem ADM (sao filhas de revendas, nao da super).
 
-  // Cliente comum sem revenda mae cadastrada (orfao).
   const parentProfile = user.reseller?.resellerProfile;
-  if (!user.resellerId || !parentProfile?.brandSlug) {
-    return NextResponse.json({ status: "no_reseller" }, { headers: CORS });
-  }
 
+  // Checa subscription ANTES do gate de reseller — usuario orfao (sem
+  // revenda mae) que paga direto pelo Duplo Pro (Mercado Pago / orphan
+  // paywall) tem subscription ativa e deve receber status='active' mesmo
+  // sem resellerId. O webhook /api/mp-webhook cria essa subscription.
   const now = new Date();
   const sub = await db.subscription.findFirst({
     where: { userId: user.id, status: "ACTIVE", expiresAt: { gt: now } },
@@ -78,26 +78,33 @@ export async function GET(req: NextRequest) {
     select: { expiresAt: true, isTrial: true },
   });
 
-  if (!sub) {
+  if (sub) {
     return NextResponse.json(
       {
-        status: "pending",
-        brandSlug: parentProfile.brandSlug,
-        brandName: parentProfile.brandName,
-        whatsapp: parentProfile.whatsapp,
+        status: "active",
+        brandSlug: parentProfile?.brandSlug,
+        brandName: parentProfile?.brandName,
+        whatsapp: parentProfile?.whatsapp,
+        expiresAt: sub.expiresAt.toISOString(),
+        isTrial: sub.isTrial,
       },
       { headers: CORS }
     );
   }
 
+  // Sem subscription ativa: usuario sem revenda mae = orfao (precisa pagar
+  // direto pelo orphan paywall). Usuario com revenda mae = pending (revenda
+  // ainda nao liberou).
+  if (!user.resellerId || !parentProfile?.brandSlug) {
+    return NextResponse.json({ status: "no_reseller" }, { headers: CORS });
+  }
+
   return NextResponse.json(
     {
-      status: "active",
+      status: "pending",
       brandSlug: parentProfile.brandSlug,
       brandName: parentProfile.brandName,
       whatsapp: parentProfile.whatsapp,
-      expiresAt: sub.expiresAt.toISOString(),
-      isTrial: sub.isTrial,
     },
     { headers: CORS }
   );

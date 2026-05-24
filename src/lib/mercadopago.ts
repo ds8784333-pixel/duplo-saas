@@ -75,3 +75,15 @@ export async function getPayment(id: string | number) {
   if (!r.ok) throw new Error(`MP get payment ${r.status}`);
   return r.json();
 }
+
+// Busca um preapproval (assinatura recorrente) por ID. Usado pelo webhook
+// do Duplo Pro pra confirmar se o cartao foi autorizado (status='authorized')
+// antes de liberar o acesso.
+export async function getPreapproval(id: string | number) {
+  const r = await fetch(`${MP_API}/preapproval/${id}`, {
+    headers: { Authorization: `Bearer ${token()}` },
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`MP get preapproval ${r.status}`);
+  return r.json();
+}
