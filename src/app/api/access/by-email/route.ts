@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
       id: true, role: true, resellerId: true,
       reseller: {
         select: {
+          role: true,
           resellerProfile: {
             select: { brandSlug: true, brandName: true, whatsapp: true },
           },
@@ -46,10 +47,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ status: "unregistered" }, { headers: CORS });
   }
 
-  // Revenda/admin: acesso livre, sem checagem de subscription.
-  if (user.role !== "USER") {
+  // ADMIN (super): acesso ADM total.
+  if (user.role === "ADMIN") {
     return NextResponse.json({ status: "reseller" }, { headers: CORS });
   }
+
+  // RESELLER: SO retorna "reseller" se parent eh ADMIN (criado via link da super).
+  // Resellers nao-vindas do link da super tem o ADM escondido — o botao no
+  // scanner aparece apenas pra quem realmente representa o Duplo Pro.
+  if (user.role === "RESELLER") {
+    if (user.reseller?.role === "ADMIN") {
+      return NextResponse.json({ status: "reseller" }, { headers: CORS });
+    }
+    // RESELLER "rogue" (sem parent ou parent nao-ADMIN) → trata como USER:
+    // cai pra checagem de subscription / no_reseller abaixo.
+  }
+
+  // SUBRESELLER nunca tem ADM (sao filhas de revendas, nao da super).
 
   // Cliente comum sem revenda mae cadastrada (orfao).
   const parentProfile = user.reseller?.resellerProfile;

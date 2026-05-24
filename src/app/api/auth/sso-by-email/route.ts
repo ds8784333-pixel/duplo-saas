@@ -8,9 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { hashPassword, signSession, setSessionCookie } from "@/lib/auth";
+import { signSession, setSessionCookie } from "@/lib/auth";
 import { ssoAllowedOrigins, DUPLO_SAAS_URL } from "@/lib/config";
-import crypto from "node:crypto";
 
 function allowedOrigins(): string[] {
   return ssoAllowedOrigins();
@@ -74,46 +73,63 @@ export async function POST(req: NextRequest) {
     include: { wallet: true, resellerProfile: true },
   });
 
-  // Se nao existe, cria como nova conta MAE (RESELLER) com slug derivado do email.
+  // POLITICA ESTRITA DE ADM:
+  // Somente contas cujo PARENT eh o SUPER-ADMIN (role ADMIN) tem ADM.
+  // - Email novo (nao existe): NEGA. Cliente comum nao vira revenda
+  //   automaticamente pelo SSO — precisa ser cadastrado via link da super.
+  // - User existente sem parent (orfao): NEGA. Auto-cadastros direto no
+  //   /register ou via Google Sign-In nao recebem ADM.
+  // - User existente com parent que nao eh ADMIN: NEGA (conta filha de
+  //   outra revenda).
+  // - User existente com parent ADMIN: PROMOVE pra RESELLER se ainda nao for.
+  // - ADMIN existente (a propria super): libera direto.
+  // - RESELLER existente: libera somente se parent eh ADMIN (criado via link).
   if (!user) {
-    let baseSlug = slugify(displayName) || slugify(email.split("@")[0]);
-    let slug = baseSlug;
-    let i = 1;
-    while (await db.reseller.findUnique({ where: { brandSlug: slug } })) {
-      slug = `${baseSlug}-${i++}`;
+    return NextResponse.json(
+      { error: "Conta nao encontrada. Acesse pelo link de cadastro do Duplo Pro pra ter o painel ADM." },
+      { status: 403, headers: cors }
+    );
+  }
+
+  if (user.role === "ADMIN") {
+    // ADMIN (super): libera direto, sem mais checagens.
+  } else if (user.role === "RESELLER") {
+    // RESELLER existente: garante que o parent eh ADMIN (criado via link da super).
+    if (!user.resellerId) {
+      return NextResponse.json(
+        { error: "Esta revenda nao foi cadastrada via link do Duplo Pro." },
+        { status: 403, headers: cors }
+      );
     }
-    user = await db.user.create({
-      data: {
-        email,
-        name: displayName,
-        // Senha aleatoria (nunca usada — o login dele e via SSO do Duplo Pro).
-        passwordHash: hashPassword(crypto.randomBytes(16).toString("hex")),
-        role: "RESELLER",
-        wallet: { create: {} },
-        resellerProfile: { create: { brandName: displayName, brandSlug: slug } },
-      },
-      include: { wallet: true, resellerProfile: true },
+    const parent = await db.user.findUnique({
+      where: { id: user.resellerId },
+      select: { role: true },
     });
-  } else if (user.role !== "ADMIN" && user.role !== "RESELLER") {
-    // USER existente. Politica:
-    //   - Sem parent (resellerId NULL) OU parent eh o super-admin (ADMIN)
-    //     → conta MAE → promove automaticamente a RESELLER.
-    //   - Parent eh outro RESELLER/SUBRESELLER → conta FILHA de outra
-    //     revenda; mantem 403 (cliente nao vira concorrente sozinho).
-    if (user.resellerId) {
-      const parent = await db.user.findUnique({
-        where: { id: user.resellerId },
-        select: { role: true },
-      });
-      if (parent && parent.role !== "ADMIN") {
-        return NextResponse.json(
-          { error: "Este email pertence a uma conta de cliente, nao a uma revenda." },
-          { status: 403, headers: cors }
-        );
-      }
+    if (!parent || parent.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Esta revenda nao foi cadastrada via link do Duplo Pro." },
+        { status: 403, headers: cors }
+      );
     }
-    // Promove pra RESELLER: gera slug unico e cria reseller profile + wallet
-    // se ainda nao existirem.
+  } else {
+    // USER comum: so promove se PARENT eh ADMIN (super-admin).
+    if (!user.resellerId) {
+      return NextResponse.json(
+        { error: "Esta conta nao foi cadastrada via link do Duplo Pro. Apenas resellers convidadas tem ADM." },
+        { status: 403, headers: cors }
+      );
+    }
+    const parent = await db.user.findUnique({
+      where: { id: user.resellerId },
+      select: { role: true },
+    });
+    if (!parent || parent.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Esta conta nao foi cadastrada via link do Duplo Pro." },
+        { status: 403, headers: cors }
+      );
+    }
+    // Promove pra RESELLER: gera slug unico e cria reseller profile + wallet.
     let baseSlug = slugify(user.name || email.split("@")[0]);
     let slug = baseSlug;
     let i = 1;
@@ -133,8 +149,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Garante reseller profile (caso o user exista mas sem profile).
-  if (!user.resellerProfile) {
+  // Garante reseller profile (caso ADMIN/RESELLER exista mas sem profile).
+  if (!user.resellerProfile && user.role !== "USER") {
     let baseSlug = slugify(user.name || email.split("@")[0]);
     let slug = baseSlug;
     let i = 1;
