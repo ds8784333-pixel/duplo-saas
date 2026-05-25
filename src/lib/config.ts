@@ -28,9 +28,12 @@ export const DUPLO_PRO_URL =
 // Dominios custom ja em uso no Duplo Pro. Hard-coded no fallback pra que
 // o SSO + iframe funcionem mesmo se as env vars (DUPLO_PRO_ORIGINS,
 // FRAME_ANCESTORS_EXTRA) ainda nao tiverem sido setadas no painel da Vercel.
+// Inclui o dominio Vercel original (odds-sable.vercel.app) pra que continue
+// funcionando mesmo quando NEXT_PUBLIC_DUPLO_PRO_URL aponta pro custom domain.
 export const DUPLO_PRO_EXTRA_ORIGINS = [
   "https://duplopro.xyz",
   "https://www.duplopro.xyz",
+  "https://odds-sable.vercel.app",
 ];
 
 export const DUPLO_SAAS_URL =
@@ -53,4 +56,19 @@ export function ssoAllowedOrigins(): string[] {
     .split(",").map((s) => s.trim()).filter(Boolean);
   const all = new Set<string>([DUPLO_PRO_URL, ...DUPLO_PRO_EXTRA_ORIGINS, ...fromEnv]);
   return Array.from(all);
+}
+
+// Checa se um origin esta autorizado a chamar o SSO. Aceita matching exato
+// (lista de ssoAllowedOrigins) E qualquer subdominio direto de vercel.app
+// (deployments de preview da Vercel: odds-git-*.vercel.app, etc).
+export function isSsoOriginAllowed(origin: string | null | undefined): boolean {
+  if (!origin) return false;
+  if (ssoAllowedOrigins().includes(origin)) return true;
+  try {
+    const u = new URL(origin);
+    if (u.protocol === "https:" && /^[a-z0-9-]+\.vercel\.app$/i.test(u.hostname)) {
+      return true;
+    }
+  } catch { /* origin invalido */ }
+  return false;
 }

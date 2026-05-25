@@ -9,11 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { signSession, setSessionCookie } from "@/lib/auth";
-import { ssoAllowedOrigins, DUPLO_SAAS_URL } from "@/lib/config";
-
-function allowedOrigins(): string[] {
-  return ssoAllowedOrigins();
-}
+import { isSsoOriginAllowed, DUPLO_SAAS_URL } from "@/lib/config";
 
 function originOf(req: NextRequest): string | null {
   const o = req.headers.get("origin");
@@ -24,7 +20,7 @@ function originOf(req: NextRequest): string | null {
 }
 
 function corsFor(origin: string | null) {
-  const ok = origin && allowedOrigins().includes(origin);
+  const ok = isSsoOriginAllowed(origin);
   return {
     "Access-Control-Allow-Origin": ok ? origin! : "null",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -55,7 +51,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = originOf(req);
   const cors = corsFor(origin);
-  if (!origin || !allowedOrigins().includes(origin)) {
+  if (!isSsoOriginAllowed(origin)) {
     return NextResponse.json({ error: "Origem nao autorizada" }, { status: 403, headers: cors });
   }
 

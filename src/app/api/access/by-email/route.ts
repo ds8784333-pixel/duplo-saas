@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ status: "unregistered" }, { headers: CORS });
   }
 
-  // ADMIN (super): acesso ADM total.
+  // ADMIN (super): acesso ADM total. Nao tem subscription propria.
   if (user.role === "ADMIN") {
     return NextResponse.json({ status: "reseller" }, { headers: CORS });
   }
@@ -55,9 +55,29 @@ export async function GET(req: NextRequest) {
   // RESELLER: SO retorna "reseller" se parent eh ADMIN (criado via link da super).
   // Resellers nao-vindas do link da super tem o ADM escondido — o botao no
   // scanner aparece apenas pra quem realmente representa o Duplo Pro.
+  // Inclui expiresAt/isTrial da PROPRIA sub (criada pela super-admin no
+  // /liberar-acesso) pra que o card "Dias Restantes" no scanner renderize
+  // corretamente — sem isso a mae enxergava sempre "—".
   if (user.role === "RESELLER") {
     if (user.reseller?.role === "ADMIN") {
-      return NextResponse.json({ status: "reseller" }, { headers: CORS });
+      const now = new Date();
+      const motherSub = await db.subscription.findFirst({
+        where: { userId: user.id, status: "ACTIVE", expiresAt: { gt: now } },
+        orderBy: { expiresAt: "desc" },
+        select: { expiresAt: true, isTrial: true },
+      });
+      return NextResponse.json(
+        {
+          status: "reseller",
+          ...(motherSub
+            ? {
+                expiresAt: motherSub.expiresAt.toISOString(),
+                isTrial: motherSub.isTrial,
+              }
+            : {}),
+        },
+        { headers: CORS }
+      );
     }
     // RESELLER "rogue" (sem parent ou parent nao-ADMIN) → trata como USER:
     // cai pra checagem de subscription / no_reseller abaixo.
