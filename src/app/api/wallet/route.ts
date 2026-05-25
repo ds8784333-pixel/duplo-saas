@@ -18,6 +18,10 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
+    // isAdmin diz pra UI que essa conta nao tem custo por dia (super-admin),
+    // entao a UI esconde avisos de "saldo baixo" e nao bloqueia botoes
+    // por canAfford. Carteira/saldo continuam exibidos pra consistencia.
+    isAdmin: me.role === "ADMIN",
     user: { id: me.id, name: me.name, brandName: me.resellerProfile?.brandName },
     wallet: {
       balance: wallet.balance.toString(),

@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { KeyRound, Gift, Inbox, Check, Clock, AlertTriangle, Wallet } from "lucide-react";
+import { KeyRound, Gift, Inbox, Check, Clock, AlertTriangle, Wallet, UserX, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate, brl } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ type ChildRow = {
   subscription: { expiresAt: string; status: string } | null;
 };
 
-type WalletInfo = { balance: number; pricePerDay: number };
+type WalletInfo = { balance: number; pricePerDay: number; isAdmin: boolean };
 
 export default function LiberarPage() {
   const [email, setEmail] = useState("");
@@ -27,7 +27,7 @@ export default function LiberarPage() {
   const [children, setChildren] = useState<ChildRow[]>([]);
   const [childrenLoading, setChildrenLoading] = useState(true);
   const [actingOn, setActingOn] = useState<string>("");
-  const [wallet, setWallet] = useState<WalletInfo>({ balance: 0, pricePerDay: 0 });
+  const [wallet, setWallet] = useState<WalletInfo>({ balance: 0, pricePerDay: 0, isAdmin: false });
 
   const loadChildren = useCallback(async () => {
     setChildrenLoading(true);
@@ -50,6 +50,7 @@ export default function LiberarPage() {
       setWallet({
         balance: Number(j?.wallet?.balance || 0),
         pricePerDay: Number(j?.pricePerDay || 0),
+        isAdmin: !!j?.isAdmin,
       });
     } catch (_) {}
   }, []);
@@ -62,7 +63,41 @@ export default function LiberarPage() {
     return Number((dias * wallet.pricePerDay).toFixed(2));
   }
   function canAfford(dias: number, isTrial: boolean) {
+    // Super-admin nao gasta da carteira — sempre pode liberar.
+    if (wallet.isAdmin) return true;
     return isTrial || wallet.balance >= costFor(dias, isTrial);
+  }
+
+  async function setUserActive(id: string, email: string, active: boolean) {
+    setActingOn(email);
+    const r = await fetch(`/api/users/${id}`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active }),
+    });
+    setActingOn("");
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast.error(d.error || "Falha ao atualizar usuario");
+      return;
+    }
+    toast.success(active ? "Usuario reativado." : "Usuario desativado.");
+    loadChildren();
+  }
+
+  async function deleteUser(id: string, email: string) {
+    if (!confirm(`Apagar definitivamente "${email}"?\n\nEsta acao remove o usuario, assinaturas, carteira, historico de login e tudo mais. Nao pode ser desfeita.`)) {
+      return;
+    }
+    setActingOn(email);
+    const r = await fetch(`/api/users/${id}`, { method: "DELETE" });
+    setActingOn("");
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast.error(d.error || "Falha ao apagar usuario");
+      return;
+    }
+    toast.success("Usuario apagado.");
+    loadChildren();
   }
 
   async function releaseFor(targetEmail: string, dias: number, isTrial: boolean) {
@@ -120,7 +155,9 @@ export default function LiberarPage() {
     return c.subscription && exp > now;
   });
 
-  const lowBalance = wallet.balance < wallet.pricePerDay * 7 && wallet.pricePerDay > 0;
+  // Super-admin nao paga por dia — aviso de saldo baixo e o destaque
+  // ambar do banner sao suprimidos.
+  const lowBalance = !wallet.isAdmin && wallet.balance < wallet.pricePerDay * 7 && wallet.pricePerDay > 0;
 
   return (
     <div className="p-6 max-w-4xl animate-fade-in space-y-6">
@@ -258,6 +295,28 @@ export default function LiberarPage() {
                         onClick={() => releaseFor(u.email, 30, false)}
                       >
                         +30 dias · {brl(costFor(30, false))}
+                      </Button>
+                      {/* Desativar: marca active=false, mantem historico financeiro. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        title="Desativar (mantem historico, pode reativar depois)"
+                        onClick={() => setUserActive(u.id, u.email, false)}
+                        className="text-amber-400 hover:text-amber-300"
+                      >
+                        <UserX className="h-3.5 w-3.5 mr-1" /> Desativar
+                      </Button>
+                      {/* Apagar: hard delete em cascata. Irreversivel. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        title="Apagar de vez (usuario, assinaturas, historico)"
+                        onClick={() => deleteUser(u.id, u.email)}
+                        className="text-red-400 hover:text-red-300 border-red-500/30 hover:border-red-500/60"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Apagar
                       </Button>
                     </div>
                   </div>
