@@ -13,6 +13,16 @@ const schema = z.object({
   trial: z.boolean().default(false),
 });
 
+// Mesmo padrao usado em sso-by-email pra gerar brandSlug unico.
+function slugify(s: string) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40) || "revenda";
+}
+
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
@@ -56,19 +66,73 @@ export async function POST(req: NextRequest) {
 
   const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
+  // Quando quem libera eh o SUPER-ADMIN (role=ADMIN), a conta nasce ja como
+  // RESELLER (com brandSlug, resellerProfile, wallet) — assim o botao ADM
+  // aparece direto no scanner sem precisar passar pelo SSO de promocao.
+  // Esse e o significado de "conta mae": criada pela super.
+  // Quando quem libera eh uma revenda normal (RESELLER), continua criando
+  // como USER (cliente comum dela).
+  const createAsReseller = me.role === "ADMIN";
+
   // upsert user (cria como conta filha vinculada ao reseller atual).
-  let user = await db.user.findUnique({ where: { email } });
+  let user = await db.user.findUnique({ where: { email }, include: { resellerProfile: true } });
   if (!user) {
-    user = await db.user.create({
+    const defaultName = email.split("@")[0];
+    if (createAsReseller) {
+      // Slug unico pra revenda nova (igual ao usado no sso-by-email).
+      let baseSlug = slugify(defaultName);
+      let slug = baseSlug;
+      let i = 1;
+      while (await db.reseller.findUnique({ where: { brandSlug: slug } })) {
+        slug = `${baseSlug}-${i++}`;
+      }
+      user = await db.user.create({
+        data: {
+          email,
+          name: defaultName,
+          passwordHash: hashPassword(Math.random().toString(36).slice(2, 10)),
+          role: "RESELLER",
+          resellerId: me.id,
+          wallet: { create: {} },
+          resellerProfile: { create: { brandName: defaultName, brandSlug: slug } },
+        },
+        include: { resellerProfile: true },
+      });
+    } else {
+      user = await db.user.create({
+        data: {
+          email,
+          name: defaultName,
+          passwordHash: hashPassword(Math.random().toString(36).slice(2, 10)),
+          role: "USER",
+          resellerId: me.id,
+          wallet: { create: {} },
+        },
+        include: { resellerProfile: true },
+      });
+    }
+  } else if (createAsReseller && user.role === "USER" && user.resellerId === me.id) {
+    // User pre-existente que ja eh filha do super: promove pra RESELLER
+    // e garante resellerProfile + wallet. Esse ramo cobre contas criadas
+    // antes desta logica (legado) e reliberações.
+    let baseSlug = slugify(user.name || email.split("@")[0]);
+    let slug = baseSlug;
+    let i = 1;
+    while (await db.reseller.findUnique({ where: { brandSlug: slug } })) {
+      slug = `${baseSlug}-${i++}`;
+    }
+    user = await db.user.update({
+      where: { id: user.id },
       data: {
-        email,
-        name: email.split("@")[0],
-        passwordHash: hashPassword(Math.random().toString(36).slice(2, 10)),
-        role: "USER",
-        resellerId: me.id,
-        wallet: { create: {} },
+        role: "RESELLER",
+        ...(user.resellerProfile
+          ? {}
+          : { resellerProfile: { create: { brandName: user.name || email.split("@")[0], brandSlug: slug } } }),
       },
+      include: { resellerProfile: true },
     });
+    // garante wallet (defensivo)
+    await db.wallet.upsert({ where: { userId: user.id }, create: { userId: user.id }, update: {} });
   }
 
   // upsert subscription
