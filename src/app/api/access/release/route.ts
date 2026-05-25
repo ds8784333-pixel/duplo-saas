@@ -27,17 +27,20 @@ export async function POST(req: NextRequest) {
   const isTrial = body.data.trial;
   const days = isTrial ? 1 : body.data.days;
   const pricePerDay = Number(plan.pricePerDay);
-  const price = isTrial ? 0 : pricePerDay * days;
+  // Super-admin (role=ADMIN) libera de graca: nao tem custo, nao debita
+  // carteira, e nunca bate no 402 de saldo insuficiente.
+  const isSuperAdmin = me.role === "ADMIN";
+  const price = (isTrial || isSuperAdmin) ? 0 : pricePerDay * days;
 
   // Bloqueia liberacao paga se a carteira do reseller nao tem saldo suficiente.
-  // Trial (24h gratis) continua liberado mesmo com saldo zerado.
+  // Trial (24h gratis) e super-admin continuam liberados mesmo com saldo zerado.
   const wallet = await db.wallet.upsert({
     where: { userId: me.id },
     create: { userId: me.id },
     update: {},
   });
   const currentBalance = Number(wallet.balance);
-  if (!isTrial && currentBalance < price) {
+  if (!isTrial && !isSuperAdmin && currentBalance < price) {
     return NextResponse.json(
       {
         error: "Saldo insuficiente na carteira da revenda.",

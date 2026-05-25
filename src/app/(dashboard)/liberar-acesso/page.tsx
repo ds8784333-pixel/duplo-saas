@@ -67,6 +67,16 @@ export default function LiberarPage() {
     if (wallet.isAdmin) return true;
     return isTrial || wallet.balance >= costFor(dias, isTrial);
   }
+  // Rotulo do botao de liberacao: super-admin ve so a duracao
+  // ("30 dias"), reseller ve "30 dias · R$ 18,00".
+  function priceLabel(dias: number) {
+    if (wallet.isAdmin) return `${dias} dia${dias > 1 ? "s" : ""}`;
+    return `${dias} dia${dias > 1 ? "s" : ""} · ${brl(costFor(dias, false))}`;
+  }
+  function renewLabel(dias: number) {
+    if (wallet.isAdmin) return `+${dias} dias`;
+    return `+${dias} dias · ${brl(costFor(dias, false))}`;
+  }
 
   async function setUserActive(id: string, email: string, active: boolean) {
     setActingOn(email);
@@ -166,34 +176,37 @@ export default function LiberarPage() {
         <p className="text-sm text-muted-foreground">Aprove cadastros pendentes ou libere/renove acesso por dias.</p>
       </div>
 
-      {/* Banner de saldo: mostra carteira atual + preco/dia + CTA para depositar */}
-      <Card className={lowBalance ? "border-amber-500/50 bg-amber-500/5" : ""}>
-        <CardContent className="py-4 flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-3 flex-1 min-w-[200px]">
-            <div className={"h-10 w-10 rounded-xl grid place-items-center " + (lowBalance ? "bg-amber-500/15 text-amber-400" : "bg-primary/15 text-primary")}>
-              {lowBalance ? <AlertTriangle className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+      {/* Banner de saldo: mostra carteira atual + preco/dia + CTA para depositar.
+          OCULTO pra super-admin (role=ADMIN), que libera de graca e nao usa carteira. */}
+      {!wallet.isAdmin && (
+        <Card className={lowBalance ? "border-amber-500/50 bg-amber-500/5" : ""}>
+          <CardContent className="py-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+              <div className={"h-10 w-10 rounded-xl grid place-items-center " + (lowBalance ? "bg-amber-500/15 text-amber-400" : "bg-primary/15 text-primary")}>
+                {lowBalance ? <AlertTriangle className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Saldo da carteira</div>
+                <div className="text-xl font-extrabold">{brl(wallet.balance)}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Saldo da carteira</div>
-              <div className="text-xl font-extrabold">{brl(wallet.balance)}</div>
+            <div className="flex items-center gap-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Preco por dia</div>
+                <div className="text-base font-bold">{brl(wallet.pricePerDay)}</div>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="text-xs text-muted-foreground">Preco por dia</div>
-              <div className="text-base font-bold">{brl(wallet.pricePerDay)}</div>
+            <div className="flex-1 text-right">
+              <Link href="/carteira" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-orange-400 to-amber-400 text-black font-bold text-sm hover:opacity-90">
+                + Adicionar saldo
+              </Link>
+              {lowBalance && (
+                <div className="text-[11px] text-amber-400 mt-1">Saldo baixo — adicione antes de liberar mais acessos.</div>
+              )}
             </div>
-          </div>
-          <div className="flex-1 text-right">
-            <Link href="/carteira" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-orange-400 to-amber-400 text-black font-bold text-sm hover:opacity-90">
-              + Adicionar saldo
-            </Link>
-            {lowBalance && (
-              <div className="text-[11px] text-amber-400 mt-1">Saldo baixo — adicione antes de liberar mais acessos.</div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Cadastros pendentes — contas filhas sem subscription ativa */}
       <Card>
@@ -229,19 +242,19 @@ export default function LiberarPage() {
                         size="sm"
                         variant="outline"
                         disabled={busy || !canAfford(7, false)}
-                        title={!canAfford(7, false) ? `Saldo insuficiente (${brl(costFor(7, false))})` : `Debita ${brl(costFor(7, false))}`}
+                        title={wallet.isAdmin ? "Liberar de graca (super-admin)" : (!canAfford(7, false) ? `Saldo insuficiente (${brl(costFor(7, false))})` : `Debita ${brl(costFor(7, false))}`)}
                         onClick={() => releaseFor(u.email, 7, false)}
                       >
-                        7 dias · {brl(costFor(7, false))}
+                        {priceLabel(7)}
                       </Button>
                       <Button
                         size="sm"
                         variant="gradient"
                         disabled={busy || !canAfford(30, false)}
-                        title={!canAfford(30, false) ? `Saldo insuficiente (${brl(costFor(30, false))})` : `Debita ${brl(costFor(30, false))}`}
+                        title={wallet.isAdmin ? "Liberar de graca (super-admin)" : (!canAfford(30, false) ? `Saldo insuficiente (${brl(costFor(30, false))})` : `Debita ${brl(costFor(30, false))}`)}
                         onClick={() => releaseFor(u.email, 30, false)}
                       >
-                        <Check className="h-3.5 w-3.5 mr-1" /> {busy ? "Liberando..." : `30 dias · ${brl(costFor(30, false))}`}
+                        <Check className="h-3.5 w-3.5 mr-1" /> {busy ? "Liberando..." : priceLabel(30)}
                       </Button>
                     </div>
                   </div>
@@ -282,19 +295,19 @@ export default function LiberarPage() {
                         size="sm"
                         variant="outline"
                         disabled={busy || !canAfford(7, false)}
-                        title={!canAfford(7, false) ? `Saldo insuficiente (${brl(costFor(7, false))})` : `Debita ${brl(costFor(7, false))}`}
+                        title={wallet.isAdmin ? "Liberar de graca (super-admin)" : (!canAfford(7, false) ? `Saldo insuficiente (${brl(costFor(7, false))})` : `Debita ${brl(costFor(7, false))}`)}
                         onClick={() => releaseFor(u.email, 7, false)}
                       >
-                        +7 dias · {brl(costFor(7, false))}
+                        {renewLabel(7)}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={busy || !canAfford(30, false)}
-                        title={!canAfford(30, false) ? `Saldo insuficiente (${brl(costFor(30, false))})` : `Debita ${brl(costFor(30, false))}`}
+                        title={wallet.isAdmin ? "Liberar de graca (super-admin)" : (!canAfford(30, false) ? `Saldo insuficiente (${brl(costFor(30, false))})` : `Debita ${brl(costFor(30, false))}`)}
                         onClick={() => releaseFor(u.email, 30, false)}
                       >
-                        +30 dias · {brl(costFor(30, false))}
+                        {renewLabel(30)}
                       </Button>
                       {/* Desativar: marca active=false, mantem historico financeiro. */}
                       <Button
@@ -342,9 +355,14 @@ export default function LiberarPage() {
             <label className="block">
               <span className="text-xs font-semibold">Dias</span>
               <Input type="number" min={1} max={365} required value={days} onChange={(e) => setDays(e.target.value)} disabled={trial} />
-              {!trial && (
+              {!trial && !wallet.isAdmin && (
                 <span className="text-[11px] text-muted-foreground">
                   Custo: <b>{brl(costFor(Number(days) || 0, false))}</b> · Saldo: <b>{brl(wallet.balance)}</b>
+                </span>
+              )}
+              {!trial && wallet.isAdmin && (
+                <span className="text-[11px] text-muted-foreground">
+                  Liberacao gratuita (super-admin).
                 </span>
               )}
             </label>
