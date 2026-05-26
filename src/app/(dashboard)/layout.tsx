@@ -42,7 +42,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    // Mobile: empilha vertical (top bar em cima, main embaixo).
+    // Desktop (>= md): row com sidebar fixa na esquerda.
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <Sidebar brand={brand} isSuper={isSuperAdmin(user)} />
       <main className="flex-1 min-w-0">{children}</main>
     </div>
