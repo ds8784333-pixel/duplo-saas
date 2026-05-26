@@ -22,6 +22,24 @@ function normalizeSlug(raw: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+// Remove o prefixo "55" do Brasil se o numero salvo ja vier com ele, pra
+// exibir so DDD+numero no input. Numero brasileiro tem 10-11 digitos
+// (DDD 2 + 8 ou 9 do celular); se chegou com 12-13, tira o 55 da frente.
+function stripBr55(raw: string) {
+  const d = (raw || "").replace(/\D/g, "");
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) return d.slice(2);
+  return d;
+}
+
+// Prepara o numero pra salvar: prepende "55" se o usuario digitou so
+// DDD+numero (10-11 digitos). Se ja veio com 55 ou em outro formato, mantem.
+function withBr55(raw: string) {
+  const d = (raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length === 10 || d.length === 11) return "55" + d;
+  return d;
+}
+
 export default function MinhaRevendaPage() {
   const [profile, setProfile] = useState({ brandName: "", brandSlug: "", logoUrl: "", whatsapp: "" });
   const [loading, setLoading] = useState(true);
@@ -33,7 +51,7 @@ export default function MinhaRevendaPage() {
       brandName: j.resellerProfile?.brandName || j.name || "",
       brandSlug: j.resellerProfile?.brandSlug || "",
       logoUrl: j.resellerProfile?.logoUrl || "",
-      whatsapp: j.resellerProfile?.whatsapp || "",
+      whatsapp: stripBr55(j.resellerProfile?.whatsapp || ""),
     });
     setLoading(false);
   }
@@ -51,7 +69,7 @@ export default function MinhaRevendaPage() {
   async function save() {
     const cleanSlug = normalizeSlug(profile.brandSlug);
     if (!cleanSlug) return toast.error("Defina um slug valido (letras, numeros e hifens).");
-    const body = { ...profile, brandSlug: cleanSlug };
+    const body = { ...profile, brandSlug: cleanSlug, whatsapp: withBr55(profile.whatsapp) };
     const r = await fetch("/api/auth/me", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
@@ -159,9 +177,9 @@ export default function MinhaRevendaPage() {
             <CardHeader><CardTitle><MessageSquare className="h-4 w-4 inline mr-1" /> WhatsApp de suporte</CardTitle></CardHeader>
             <CardContent>
               <label className="block">
-                <span className="text-xs font-semibold">Número com DDD (somente dígitos)</span>
-                <Input inputMode="numeric" value={profile.whatsapp || ""} onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value.replace(/\D/g, "") })} placeholder="5511999999999" />
-                <span className="text-[11px] text-muted-foreground">Exemplo: 5511999999999 (55 + DDD + número)</span>
+                <span className="text-xs font-semibold">DDD + número (somente dígitos)</span>
+                <Input inputMode="numeric" maxLength={11} value={profile.whatsapp || ""} onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value.replace(/\D/g, "").slice(0, 11) })} placeholder="11999999999" />
+                <span className="text-[11px] text-muted-foreground">Exemplo: 11999999999 (DDD + número, sem o 55)</span>
               </label>
             </CardContent>
           </Card>
